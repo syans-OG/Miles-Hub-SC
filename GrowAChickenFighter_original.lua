@@ -45,52 +45,7 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
 end)
 
-pcall(function()
-    if hookmetamethod then
-        local originalNamecall
-        originalNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-            local method = getnamecallmethod()
-            local args = {...}
-
-            if tostring(method):lower() == "kick" and self == LocalPlayer then
-                warn("[Miles-HUB Shield] Client-side Kick diblokir! Alasan:", args[1] or "No reason")
-                return nil
-            end
-
-            return originalNamecall(self, ...)
-        end)
-
-        local originalIndex
-        originalIndex = hookmetamethod(game, "__index", function(self, key)
-            if not checkcaller or not checkcaller() then
-                if tostring(key) == "WalkSpeed" and typeof(self) == "Instance" and self:IsA("Humanoid") then
-                    return 16
-                elseif tostring(key) == "JumpPower" and typeof(self) == "Instance" and self:IsA("Humanoid") then
-                    return 50
-                end
-            end
-            return originalIndex(self, key)
-        end)
-    end
-
-    -- Soft anti-cheat awareness: log detected scripts without forcibly disabling them
-    -- Disabling server-side LocalScripts can trigger detection anomalies
-    task.spawn(function()
-        task.wait(2)
-        local containers = {LocalPlayer:FindFirstChild("PlayerScripts")}
-        for _, container in ipairs(containers) do
-            if container then
-                for _, scr in ipairs(container:GetDescendants()) do
-                    if scr:IsA("LocalScript") then
-                        local nameLower = scr.Name:lower()
-                        if string.find(nameLower, "anticheat") or string.find(nameLower, "security") then
-                            warn("[Miles-HUB] Detected: " .. scr:GetFullName())
-                        end
-                    end
-                end
-            end
-        end
-    end)
+-- Anti-cheat hooks removed (BAC-2515 detection vector)
 end)
 
 local EggDatabase = {}
