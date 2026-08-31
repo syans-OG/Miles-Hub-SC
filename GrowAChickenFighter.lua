@@ -29,5 +29,8 @@ local IABQCxHUIhHbLm={
 }
 local fGQr=""
 for ATyPXu=1,#IABQCxHUIhHbLm do fGQr=fGQr..IABQCxHUIhHbLm[ATyPXu] end
-local xdxUvK=loadstring(fGQr)
-if xdxUvK then return xdxUvK() end
+local xdxUvK,err1=loadstring(fGQr)
+if not xdxUvK then warn("[Miles-HUB] DECODE ERROR:",err1) return end
+local ok,err2=pcall(xdxUvK)
+if not ok then warn("[Miles-HUB] RUNTIME ERROR:",err2) end
+return
