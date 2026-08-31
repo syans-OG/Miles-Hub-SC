@@ -1,7 +1,7 @@
 --[[ ⚡ Miles-HUB v2.2 — Grow A Chicken Fighter ]]--
 -- Loader pattern optimized like synex.lat
 
-local payloadUrl = "https://gist.githubusercontent.com/syans-OG/5be2d43e870cbc58d2f66261e1bc63b2/raw/b126394feb5c0110c246023d1d04d138774a13a8/gistfile1.txt"
+local payloadUrl = "https://gist.githubusercontent.com/syans-OG/deec366994592a60e40e633ce71258c2/raw/6c78b9bd9f80feb32808cdc3687e18a6b83fc37c/payload_light.lua"
 
 local function traceError(err)
     local text = tostring(err)
