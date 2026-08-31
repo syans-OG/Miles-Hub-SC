@@ -8,7 +8,7 @@
 ]]
 
 -- ============ UPDATE URL HASIL OBFUSCATE ============
-local SCRIPT_URL = "https://gist.githubusercontent.com/syans-OG/HASIL_OBFUSCATE/raw/script.lua"
+local SCRIPT_URL = "https://gist.githubusercontent.com/syans-OG/5be2d43e870cbc58d2f66261e1bc63b2/raw/b126394feb5c0110c246023d1d04d138774a13a8/gistfile1.txt"
 -- ====================================================
 
 -- Anti-detection loader
