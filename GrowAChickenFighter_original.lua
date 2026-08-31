@@ -24,7 +24,7 @@ local SessionRebirths = 0
 local HUB_VERSION = "2.2"
 local HUB_TITLE = "⚡ Miles-HUB v" .. HUB_VERSION
 
-local Rayfield = nil
+local Rayfield = _G._MilesRayfield or nil
 local function SafeNotify(opts)
     if Rayfield then
         pcall(function() Rayfield:Notify(opts) end)
@@ -733,9 +733,7 @@ task.spawn(function()
     end
 end)
 
-pcall(function()
-    Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-end)
+-- Rayfield: injected by loader (MiniRayfield)
 if not Rayfield then
     warn("[Miles-HUB] Gagal memuat Rayfield UI! Beberapa fitur mungkin tidak tersedia.")
     -- Create a mock Rayfield so the script doesn't crash

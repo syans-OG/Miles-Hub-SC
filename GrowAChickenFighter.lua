@@ -1,9 +1,5 @@
 --[[ ⚡ Miles-HUB v2.2 — Grow A Chicken Fighter ]]--
--- Self-contained loader: no external UI dependency
 print("[Miles-HUB] v2.2 loading...")
-
--- ═══ Step 1: Build MiniRayfield UI library inline ═══
--- (This avoids fetching sirius.menu/rayfield which fails on Delta)
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -38,7 +34,6 @@ local function safeNotify(opts)
     end)
 end
 
--- ═══ Build Rayfield-compatible object ═══
 local Rayfield = {}
 Rayfield.__index = Rayfield
 
@@ -187,7 +182,9 @@ end
 
 function Rayfield:Notify(o) safeNotify(o) end
 
--- ═══ Step 2: Fetch and run the script ═══
+-- ═══ Inject Rayfield and fetch script ═══
+_G._MilesRayfield = Rayfield
+
 print("[Miles-HUB] Fetching game script...")
 local ok, src = pcall(game.HttpGet, game,
     "https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_original.lua")
@@ -196,18 +193,6 @@ if not ok or not src then
     warn("[Miles-HUB] Fetch failed:", src)
     return
 end
-
--- Replace the Rayfield loadstring line with our pre-built Rayfield
-src = src:gsub(
-    "Rayfield = loadstring%(.+rayfield.+%)%(%)",
-    "-- Rayfield injected by loader"
-)
-
--- Inject our Rayfield as the first line
-src = "local Rayfield = _G._MilesRayfield\n" .. src
-
--- Set the global before execution
-_G._MilesRayfield = Rayfield
 
 print("[Miles-HUB] Compiling (" .. #src .. " bytes)...")
 local chunk, err = loadstring(src)
@@ -226,7 +211,7 @@ end))
 if not result[1] then
     warn("[Miles-HUB] Runtime error:", result[2])
 else
-    print("[Miles-HUB] ✓ Loaded successfully!")
+    print("[Miles-HUB] Loaded successfully!")
 end
 
 return table.unpack(result, 2, result.n)
