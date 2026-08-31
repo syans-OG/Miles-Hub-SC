@@ -1,14 +1,14 @@
 --[[ 
     Miles-HUB v2.2 — Loader
-    Paste script asli kamu ke WeAreDevs Obfuscator:
+    Fetches the fixed script directly from GitHub.
+    If you want to use an obfuscated version,
+    paste script asli ke WeAreDevs Obfuscator:
     https://wearedevs.net/obfuscator
-    
-    Setelah obfuscate, save hasilnya ke GitHub Gist,
-    lalu update URL di bawah ini:
+    Then update SCRIPT_URL to your Gist raw URL.
 ]]
 
--- ============ UPDATE URL HASIL OBFUSCATE ============
-local SCRIPT_URL = "https://gist.githubusercontent.com/syans-OG/5be2d43e870cbc58d2f66261e1bc63b2/raw/b126394feb5c0110c246023d1d04d138774a13a8/gistfile1.txt"
+-- ============ SCRIPT URL (Fixed Original) ============
+local SCRIPT_URL = "https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_original.lua"
 -- ====================================================
 
 -- Anti-detection loader

@@ -46,7 +46,6 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
 end)
 
 -- Anti-cheat hooks removed (BAC-2515 detection vector)
-end)
 
 local EggDatabase = {}
 
