@@ -743,6 +743,53 @@ Btn(debugTab, "Show Captured", function()
 end)
 Btn(debugTab, "Dump Module Data", DumpModuleData)
 
+local function FindHatchLogic()
+    local roots = { ReplicatedStorage }
+    local lpPs = LP:FindFirstChild("PlayerScripts")
+    if lpPs then roots[#roots + 1] = lpPs end
+    local names = { "hatch", "incub", "egg", "flock", "cluck", "farm", "fuse" }
+    local out = {}
+    local limit = 140
+    for _, root in ipairs(roots) do
+        for _, m in ipairs(root:GetDescendants()) do
+            if #out >= limit then break end
+            if m:IsA("ModuleScript") then
+                local n = m.Name:lower()
+                local matchName = false
+                for _, k in ipairs(names) do if n:find(k, 1, true) then matchName = true break end end
+                if matchName then
+                    local src = nil
+                    local ok = pcall(function() src = decompile(m) end)
+                    if ok and src and #src > 0 then
+                        local marked = false
+                        local count = 0
+                        for line in (src .. "\n"):gmatch("(.-)\n") do
+                            if #out < limit then
+                                local low = line:lower()
+                                if low:find("hatch") or low:find("incub") or low:find("fireserver") or low:find("invoke") then
+                                    if not marked then
+                                        out[#out + 1] = "== " .. m:GetFullName() .. " =="
+                                        marked = true
+                                    end
+                                    local t = line:gsub("^%s+", ""):gsub("%s+", " ")
+                                    out[#out + 1] = "  " .. t:sub(1, 150)
+                                    count = count + 1
+                                    if count >= 40 then break end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if #out == 0 then out[1] = "(no hatch logic found; maybe decompile unsupported)" end
+    dataLines = out
+    dataLbl.Text = table.concat(out, "\n")
+    Notify("Hatch-logic lines: " .. tostring(#out))
+end
+Btn(debugTab, "Find Hatch Logic", FindHatchLogic)
+
 -- Activate first tab
 for name, frame in pairs(tabContent) do
     frame.Visible = true
