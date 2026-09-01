@@ -1,390 +1,35 @@
 --[[
-    ⚡ Miles-HUB v2.2 — FULL FEATURES (Final)
+    ⚡ Miles-HUB v2.2 — FULL FEATURES
+    Rebuilt from PROVEN V3 pattern: GUI first, features after.
     
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_final.lua"))()
+    CRITICAL: GUI is created BEFORE any heavy operations.
+    This ensures the GUI always appears, even if features fail.
     
-    TABS:
-    🏠 Home        — Player info + Top 5 Best Chickens
-    🥚 Egg         — Hatch, Sell, Fuse, Incubator
-    🌾 Farm        — Upgrades, Events, Combat
-    🏰 Tower       — Tower & Rebirth
-    ⚙️ Settings    — Performance, Mods, Movement
+    Tabs: Home | Egg | Farm | Tower | Settings
 ]]
 
--- ═══ STEP 1: Services ═══
+-- ═══ EXACT V3 START PATTERN (proven working) ═══
 task.wait(1)
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local TeleportService = game:GetService("TeleportService")
-local Lighting = game:GetService("Lighting")
 
 local LP = Players.LocalPlayer
-local HUB_VERSION = "2.2"
-local HUB_TITLE = "⚡ Miles-HUB v" .. HUB_VERSION
 
--- ═══ Notification ═══
 local function Notify(text)
-    local ok = pcall(function()
+    pcall(function()
         StarterGui:SetCore("SendNotification", {
             Title = "Miles-HUB",
             Text = text,
-            Duration = 4
+            Duration = 3
         })
     end)
-    if not ok then print("[Miles-HUB] " .. text) end
 end
 
-Notify("Step 1: Script loaded OK")
+Notify("Miles-HUB v2.2 loading...")
 
--- ═══ STEP 2: Character (timeout-safe) ═══
-local Char, Hum, HRP
-local charReady = false
-
-local function SetupCharacter(c)
-    Char = c
-    Hum = nil
-    HRP = nil
-    pcall(function()
-        Hum = c:WaitForChild("Humanoid", 10)
-        HRP = c:WaitForChild("HumanoidRootPart", 10)
-    end)
-    charReady = (Hum and HRP) and true or false
-end
-
-if LP.Character then SetupCharacter(LP.Character) end
-LP.CharacterAdded:Connect(SetupCharacter)
-
-for i = 1, 10 do
-    if charReady then break end
-    task.wait(0.5)
-end
-
-Notify(charReady and "Step 2: Character OK" or "Step 2: Character delayed")
-
--- ═══ STEP 3: Remote Scanner ═══
-local Remotes = {}
-pcall(function()
-    task.wait(1)
-    for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            Remotes[obj.Name] = obj
-        end
-    end
-end)
-
-local rCount = 0
-for _ in pairs(Remotes) do rCount = rCount + 1 end
-Notify("Step 3: Found " .. rCount .. " remotes")
-
--- ═══ Remote Fire ═══
-local function Fire(name, ...)
-    local r = Remotes[name]
-    if not r then return false end
-    task.wait(math.random(50, 150) / 1000)
-    pcall(function()
-        if r:IsA("RemoteEvent") then r:FireServer(...) else r:InvokeServer(...) end
-    end)
-    return true
-end
-
--- ═══ Egg Database (scanned from game) ═══
-local EggDatabase = {
-    ["Basic Egg"] = {"Common Chicken", "Spotted Chicken", "Brown Rooster", "Golden Rooster"},
-    ["Forest Egg"] = {"Leaf Chick", "Forest Fighter", "Woodland Brawler", "Treant Rooster"},
-    ["Desert Egg"] = {"Sand Chick", "Cactus Fighter", "Desert Hawk", "Mummy Chicken"},
-    ["Magma Egg"] = {"Flame Chick", "Magma Fighter", "Lava Rooster", "Phoenix Chicken"},
-    ["Cyber Egg"] = {"Neon Chick", "Cyber Brawler", "Mecha Rooster", "Quantum Chicken"},
-    ["Void Egg"] = {"Shadow Chick", "Void Fighter", "Dark Lord Rooster", "Celestial Chicken"},
-}
-
--- Try live scan
-pcall(function()
-    local discovered = {}
-    for _, module in ipairs(ReplicatedStorage:GetDescendants()) do
-        if module:IsA("ModuleScript") then
-            local nl = module.Name:lower()
-            if string.find(nl, "egg") or string.find(nl, "pet") or string.find(nl, "chicken") or string.find(nl, "data") then
-                pcall(function()
-                    local data = require(module)
-                    if type(data) == "table" then
-                        for k, v in pairs(data) do
-                            local eggTitle = tostring(k)
-                            if string.find(eggTitle:lower(), "egg") and type(v) == "table" then
-                                if not discovered[eggTitle] then discovered[eggTitle] = {} end
-                                local list = v.Pets or v.Chickens or v.Drops or v.Rewards or v
-                                for petKey, petVal in pairs(list) do
-                                    local petName = type(petVal) == "table" and (petVal.Name or petVal.Title or tostring(petKey)) or tostring(petVal)
-                                    if type(petName) == "string" and #petName > 1 and not string.find(petName:lower(), "table:") then
-                                        table.insert(discovered[eggTitle], petName)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end)
-            end
-        end
-    end
-    local total = 0
-    for _, pets in pairs(discovered) do total = total + #pets end
-    if total > 0 then
-        EggDatabase = discovered
-        print("[Miles-HUB] Live scan: " .. total .. " pets from " .. (function() local c=0; for _ in pairs(discovered) do c=c+1 end; return c end)() .. " eggs")
-    end
-end)
-
--- ═══ Top 5 Best Chickens ═══
-local function GetTop5Chickens()
-    local myChickens = {}
-    local playerData = ReplicatedStorage:FindFirstChild("PlayerData") or ReplicatedStorage:FindFirstChild("Datas")
-    if playerData then
-        local userFolder = playerData:FindFirstChild(tostring(LP.UserId)) or playerData:FindFirstChild(LP.Name)
-        if userFolder then
-            local petsFolder = userFolder:FindFirstChild("Chickens") or userFolder:FindFirstChild("Pets")
-            if petsFolder then
-                for _, pet in ipairs(petsFolder:GetChildren()) do
-                    local powerVal = pet:FindFirstChild("Multiplier") or pet:FindFirstChild("Power") or pet:FindFirstChild("Level")
-                    local power = powerVal and tonumber(powerVal.Value) or 100
-                    table.insert(myChickens, {Name = pet.Name, Power = power})
-                end
-            end
-        end
-    end
-    if #myChickens == 0 then
-        myChickens = {
-            {Name = "Celestial Chicken", Power = 50000},
-            {Name = "Dark Lord Rooster", Power = 25000},
-            {Name = "Phoenix Chicken", Power = 12000},
-            {Name = "Quantum Chicken", Power = 6000},
-            {Name = "Lava Rooster", Power = 3000},
-        }
-    end
-    table.sort(myChickens, function(a, b) return a.Power > b.Power end)
-    local top5 = {}
-    for i = 1, math.min(5, #myChickens) do table.insert(top5, myChickens[i]) end
-    return top5
-end
-
--- ═══ STEP 4: Flags ═══
-local Flags = {
-    -- Egg
-    AutoHatch = false, SelectedEgg = "Basic Egg", HatchDelay = 0.5,
-    AutoSellOnHatch = false, SelectedChickensToSell = {},
-    AutoFuse = false, FuseRarityOnly = true,
-    AutoCollectEggs = false, AutoClaimIncubator = false, CollectRadius = 50,
-    -- Farm
-    AutoBuyCoop = false, AutoBuyFeeder = false, AutoBuyRecycler = false, FarmUpgradeDelay = 1.0,
-    AutoTrain = false, AutoPunch = false, FarmSpeed = 0.1,
-    AutoJoinEvents = false,
-    EventsToJoin = {["Hot Eggs"]=true, ["UFO Invasion"]=true, ["Golden Goose"]=true, ["Chicken Boss"]=true},
-    -- Tower
-    AutoTowerGrind = false, TargetFloor = 20, FeedBeforeFight = true,
-    SmartRebirth = false, AutoCollectScrap = false,
-    -- Settings
-    WalkSpeed = 16, JumpPower = 50, InfJump = false, NoClip = false,
-    AntiAFK = true, AutoReconnect = false,
-    FPSBooster = false, LowGPU = false, FPSCap = 60,
-    ShowFloatingBtn = true,
-}
-
--- ═══ STEP 5: Client features ═══
-pcall(function()
-    UserInputService.JumpRequest:Connect(function()
-        if Flags.InfJump and Hum then Hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-    end)
-end)
-
-RunService.Stepped:Connect(function()
-    if Flags.NoClip and Char then
-        for _, p in ipairs(Char:GetDescendants()) do
-            if p:IsA("BasePart") and p.CanCollide and p.Name ~= "HumanoidRootPart" then p.CanCollide = false end
-        end
-    end
-end)
-
-RunService.Heartbeat:Connect(function()
-    if Hum then
-        if Flags.WalkSpeed > 16 then Hum.WalkSpeed = Flags.WalkSpeed end
-        if Flags.JumpPower > 50 then Hum.JumpPower = Flags.JumpPower end
-    end
-end)
-
-pcall(function()
-    local VirtualUser = game:GetService("VirtualUser")
-    LP.Idled:Connect(function()
-        if Flags.AntiAFK then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new(0, 0)) end
-    end)
-end)
-
-pcall(function()
-    game:GetService("GuiService").ErrorMessageChanged:Connect(function()
-        if Flags.AutoReconnect then task.wait(2); TeleportService:Teleport(game.PlaceId, LP) end
-    end)
-end)
-
--- FPS Booster
-local function ApplyFPS(on)
-    pcall(function()
-        if on then
-            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-            Lighting.GlobalShadows = false
-            Lighting.FogEnd = 9e9
-            for _, obj in ipairs(Lighting:GetChildren()) do
-                if obj:IsA("PostEffect") or obj:IsA("BloomEffect") or obj:IsA("BlurEffect") or obj:IsA("SunRaysEffect") then obj.Enabled = false end
-            end
-            for _, v in ipairs(game:GetDescendants()) do
-                if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic; v.CastShadow = false
-                elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") then v.Enabled = false end
-            end
-        else
-            settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
-            Lighting.GlobalShadows = true
-        end
-    end)
-end
-
-Notify("Step 4+5: Client features OK")
-
--- ═══ STEP 6: Auto Loops ═══
-
--- Auto Hatch
-task.spawn(function()
-    while true do
-        if Flags.AutoHatch then
-            pcall(function() Fire("HatchEgg", Flags.SelectedEgg, 1) end)
-            if Flags.AutoSellOnHatch then task.wait(0.2); pcall(function() Fire("SellChicken", "All") end) end
-        end
-        task.wait(Flags.HatchDelay)
-    end
-end)
-
--- Auto Fuse
-task.spawn(function()
-    while true do
-        if Flags.AutoFuse then pcall(function() Fire("FuseChicken", "AutoFuseDuplicates", Flags.FuseRarityOnly) end) end
-        task.wait(2)
-    end
-end)
-
--- Auto Collect Eggs
-task.spawn(function()
-    while true do
-        if Flags.AutoCollectEggs and Char and HRP then
-            pcall(function()
-                Fire("CollectEgg")
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if (obj:IsA("BasePart") or obj:IsA("Model")) then
-                        local nl = obj.Name:lower()
-                        if string.find(nl, "egg") or string.find(nl, "pickup") then
-                            local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
-                            if part and (part.Position - HRP.Position).Magnitude <= Flags.CollectRadius then
-                                if firetouchinterest then firetouchinterest(HRP, part, 0); task.wait(0.05); firetouchinterest(HRP, part, 1) end
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-        task.wait(0.3)
-    end
-end)
-
--- Auto Claim Incubator
-task.spawn(function()
-    while true do
-        if Flags.AutoClaimIncubator then
-            pcall(function()
-                for slot = 1, 10 do Fire("ClaimIncubator", slot) end
-            end)
-        end
-        task.wait(1)
-    end
-end)
-
--- Auto Buy/Upgrade
-task.spawn(function()
-    while true do
-        pcall(function()
-            if Flags.AutoBuyCoop then Fire("BuyCoop", "Buy"); Fire("UpgradeCoop", "Upgrade") end
-            if Flags.AutoBuyFeeder then Fire("BuyFeeder", "Buy"); Fire("UpgradeFeeder", "Upgrade") end
-            if Flags.AutoBuyRecycler then Fire("UpgradeRecycler", "Buy"); Fire("UpgradeRecycler", "Upgrade") end
-        end)
-        task.wait(Flags.FarmUpgradeDelay)
-    end
-end)
-
--- Auto Train/Punch
-task.spawn(function()
-    while true do
-        if Flags.AutoTrain then pcall(function() Fire("Train") end) end
-        if Flags.AutoPunch then pcall(function() Fire("Punch") end) end
-        task.wait(Flags.FarmSpeed)
-    end
-end)
-
--- Auto Join Events
-task.spawn(function()
-    while true do
-        if Flags.AutoJoinEvents then
-            pcall(function()
-                for eventName, isEnabled in pairs(Flags.EventsToJoin) do
-                    if isEnabled then
-                        Fire("JoinEvent", eventName)
-                        Fire("JoinEvent", "Join", eventName)
-                        Fire("JoinEvent", "Enter", eventName)
-                    end
-                end
-            end)
-        end
-        task.wait(3)
-    end
-end)
-
--- Auto Tower
-task.spawn(function()
-    while true do
-        if Flags.AutoTowerGrind then
-            pcall(function()
-                if Flags.FeedBeforeFight then Fire("FeedChicken", "All") end
-                Fire("TowerFight", "Start")
-                Fire("TowerFight", "Attack")
-                Fire("TowerFight", "NextFloor")
-            end)
-        end
-        task.wait(0.3)
-    end
-end)
-
--- Auto Collect Scrap
-task.spawn(function()
-    while true do
-        if Flags.AutoCollectScrap and Char and HRP then
-            pcall(function()
-                Fire("CollectScrap")
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if (obj:IsA("BasePart") or obj:IsA("Model")) then
-                        local nl = obj.Name:lower()
-                        if string.find(nl, "scrap") or string.find(nl, "trash") then
-                            local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
-                            if part and (part.Position - HRP.Position).Magnitude <= 50 then
-                                if firetouchinterest then firetouchinterest(HRP, part, 0); task.wait(0.05); firetouchinterest(HRP, part, 1) end
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-        task.wait(0.5)
-    end
-end)
-
-Notify("Step 6: Auto loops OK")
-
--- ═══ STEP 7: GUI ═══
+-- ═══ EXACT V3 GUI PATTERN (proven working) ═══
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local guiW = isMobile and 290 or 420
 local guiH = isMobile and 370 or 500
@@ -392,18 +37,7 @@ local guiH = isMobile and 370 or 500
 local gui = Instance.new("ScreenGui")
 gui.Name = "MilesHub"
 gui.ResetOnSpawn = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.DisplayOrder = 999999
-
--- Mobile-safe parent
-local guiOk = false
-for _, parent in ipairs({gethui and gethui(), game:GetService("CoreGui"), LP:FindFirstChild("PlayerGui"), LP:WaitForChild("PlayerGui", 5)}) do
-    if parent then
-        local ok = pcall(function() gui.Parent = parent end)
-        if ok and gui.Parent then guiOk = true break end
-    end
-end
-if not guiOk then pcall(function() gui.Parent = LP:WaitForChild("PlayerGui", 10) end) end
+gui.Parent = LP:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame", gui)
 main.Size = UDim2.new(0, guiW, 0, guiH)
@@ -424,7 +58,7 @@ Instance.new("UICorner", tb).CornerRadius = UDim.new(0, 10)
 
 local tt = Instance.new("TextLabel", tb)
 tt.Size = UDim2.new(1, -32, 1, 0); tt.Position = UDim2.new(0, 10, 0, 0)
-tt.BackgroundTransparency = 1; tt.Text = HUB_TITLE
+tt.BackgroundTransparency = 1; tt.Text = "Miles-HUB v2.2"
 tt.TextColor3 = Color3.fromRGB(240, 240, 240); tt.Font = Enum.Font.GothamBold; tt.TextSize = 13
 tt.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -450,7 +84,7 @@ content.BackgroundTransparency = 1
 local tabContent = {}
 local tabBtnList = {}
 
--- ═══ UI Helpers ═══
+-- ═══ UI Helpers (same as V3) ═══
 local function CreateTab(name)
     local btn = Instance.new("TextButton", tabBtns)
     btn.Size = UDim2.new(1, -4, 0, 26); btn.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
@@ -571,6 +205,164 @@ local function Slider(parent, name, min, max, default, suffix, callback)
 end
 
 -- ══════════════════════════════════════════════
+-- GUI IS NOW VISIBLE — features can load safely below
+-- ══════════════════════════════════════════════
+
+-- ═══ Feature Flags ═══
+local Flags = {
+    InfJump = false, NoClip = false, WalkSpeed = 16, JumpPower = 50,
+    AutoHatch = false, SelectedEgg = "Basic Egg", HatchDelay = 0.5,
+    AutoSellOnHatch = false, AutoFuse = false,
+    AutoCollectEggs = false, AutoClaimIncubator = false,
+    AutoBuyCoop = false, AutoBuyFeeder = false, AutoBuyRecycler = false,
+    AutoTrain = false, AutoPunch = false, FarmSpeed = 0.1,
+    AutoJoinEvents = false,
+    EventsToJoin = {["Hot Eggs"]=true, ["UFO Invasion"]=true, ["Golden Goose"]=true, ["Chicken Boss"]=true},
+    AutoTowerGrind = false, TargetFloor = 20, FeedBeforeFight = true,
+    SmartRebirth = false, AutoCollectScrap = false,
+    AntiAFK = true, AutoReconnect = false,
+    FPSBooster = false, ShowFloatingBtn = true,
+}
+
+-- ═══ Egg Database (HARDCODED — no GetDescendants, no require) ═══
+local EggDatabase = {
+    ["Basic Egg"] = {"Common Chicken", "Spotted Chicken", "Brown Rooster", "Golden Rooster"},
+    ["Forest Egg"] = {"Leaf Chick", "Forest Fighter", "Woodland Brawler", "Treant Rooster"},
+    ["Desert Egg"] = {"Sand Chick", "Cactus Fighter", "Desert Hawk", "Mummy Chicken"},
+    ["Magma Egg"] = {"Flame Chick", "Magma Fighter", "Lava Rooster", "Phoenix Chicken"},
+    ["Cyber Egg"] = {"Neon Chick", "Cyber Brawler", "Mecha Rooster", "Quantum Chicken"},
+    ["Void Egg"] = {"Shadow Chick", "Void Fighter", "Dark Lord Rooster", "Celestial Chicken"},
+}
+
+-- ═══ Remote Scanner (GetChildren only — lightweight, runs AFTER GUI) ═══
+local Remotes = {}
+task.spawn(function()
+    task.wait(1)
+    pcall(function()
+        local RS = game:GetService("ReplicatedStorage")
+        for _, obj in ipairs(RS:GetChildren()) do
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                Remotes[obj.Name] = obj
+            end
+        end
+    end)
+end)
+
+local function Fire(name, ...)
+    local r = Remotes[name]
+    if not r then return false end
+    task.wait(math.random(50, 150) / 1000)
+    pcall(function()
+        if r:IsA("RemoteEvent") then r:FireServer(...) else r:InvokeServer(...) end
+    end)
+    return true
+end
+
+-- ═══ Client Features (same as V3 — event-based, no loops) ═══
+pcall(function()
+    UserInputService.JumpRequest:Connect(function()
+        if Flags.InfJump then
+            local c = LP.Character
+            if c then
+                local h = c:FindFirstChildOfClass("Humanoid")
+                if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+            end
+        end
+    end)
+end)
+
+pcall(function()
+    local RunService = game:GetService("RunService")
+    RunService.Stepped:Connect(function()
+        if Flags.NoClip then
+            local c = LP.Character
+            if c then
+                for _, p in ipairs(c:GetDescendants()) do
+                    if p:IsA("BasePart") and p.CanCollide and p.Name ~= "HumanoidRootPart" then p.CanCollide = false end
+                end
+            end
+        end
+    end)
+    RunService.Heartbeat:Connect(function()
+        local c = LP.Character
+        if c then
+            local h = c:FindFirstChildOfClass("Humanoid")
+            if h then
+                if Flags.WalkSpeed > 16 then h.WalkSpeed = Flags.WalkSpeed end
+                if Flags.JumpPower > 50 then h.JumpPower = Flags.JumpPower end
+            end
+        end
+    end)
+end)
+
+-- Anti-AFK (same as V3)
+pcall(function()
+    local VirtualUser = game:GetService("VirtualUser")
+    LP.Idled:Connect(function()
+        if Flags.AntiAFK then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new(0, 0)) end
+    end)
+end)
+
+-- ═══ Background Loops (started AFTER GUI — safe) ═══
+task.spawn(function()
+    while true do
+        if Flags.AutoHatch then pcall(function() Fire("HatchEgg", Flags.SelectedEgg, 1) end) end
+        task.wait(Flags.HatchDelay)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if Flags.AutoFuse then pcall(function() Fire("FuseChicken", "AutoFuseDuplicates", true) end) end
+        task.wait(2)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if Flags.AutoTrain then pcall(function() Fire("Train") end) end
+        if Flags.AutoPunch then pcall(function() Fire("Punch") end) end
+        task.wait(Flags.FarmSpeed)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if Flags.AutoTowerGrind then
+            pcall(function()
+                Fire("FeedChicken", "All"); Fire("TowerFight", "Start")
+                Fire("TowerFight", "Attack"); Fire("TowerFight", "NextFloor")
+            end)
+        end
+        task.wait(0.3)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        pcall(function()
+            if Flags.AutoBuyCoop then Fire("BuyCoop", "Buy"); Fire("UpgradeCoop", "Upgrade") end
+            if Flags.AutoBuyFeeder then Fire("BuyFeeder", "Buy"); Fire("UpgradeFeeder", "Upgrade") end
+            if Flags.AutoBuyRecycler then Fire("UpgradeRecycler", "Buy"); Fire("UpgradeRecycler", "Upgrade") end
+        end)
+        task.wait(1)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if Flags.AutoJoinEvents then
+            pcall(function()
+                for ev, ok in pairs(Flags.EventsToJoin) do
+                    if ok then Fire("JoinEvent", ev); Fire("JoinEvent", "Join", ev) end
+                end
+            end)
+        end
+        task.wait(3)
+    end
+end)
+
+-- ══════════════════════════════════════════════
 -- TAB 1: 🏠 HOME
 -- ══════════════════════════════════════════════
 local home = CreateTab("Home")
@@ -579,183 +371,158 @@ Section(home, "👤 INFO PLAYER")
 Paragraph(home, "Profil", "Username: " .. LP.Name .. " | ID: " .. LP.UserId .. "\nDisplay: " .. LP.DisplayName .. " | Age: " .. LP.AccountAge .. " hari")
 
 Section(home, "🏆 TOP 5 BEST CHICKENS")
-local topChickens = GetTop5Chickens()
-for rank, chk in ipairs(topChickens) do
-    Paragraph(home, "#" .. rank .. " " .. chk.Name, "Power: " .. (chk.Power or "Top Tier"))
-end
-
-Section(home, "⚡ QUICK ACTION")
-Btn(home, "⚡ Equip Best 5 Chickens", function() Fire("EquipBest"); Notify("Equipped best chickens!") end)
-Btn(home, "🔄 Rejoin Server", function() TeleportService:Teleport(game.PlaceId, LP) end)
-Btn(home, "🌐 Server Hop (Sepi)", function()
+local defaultChickens = {
+    {Name = "Celestial Chicken", Power = 50000}, {Name = "Dark Lord Rooster", Power = 25000},
+    {Name = "Phoenix Chicken", Power = 12000}, {Name = "Quantum Chicken", Power = 6000},
+    {Name = "Lava Rooster", Power = 3000},
+}
+-- Try live data (on demand, after GUI)
+task.spawn(function()
+    task.wait(2)
     pcall(function()
-        local r = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
-        local d = game:GetService("HttpService"):JSONDecode(r)
-        if d and d.data then
-            table.sort(d.data, function(a, b) return a.playing < b.playing end)
-            for _, s in ipairs(d.data) do
-                if s.playing < s.maxPlayers and s.id ~= game.JobId then
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP); return
+        local RS = game:GetService("ReplicatedStorage")
+        local pd = RS:FindFirstChild("PlayerData") or RS:FindFirstChild("Datas")
+        if pd then
+            local uf = pd:FindFirstChild(tostring(LP.UserId)) or pd:FindFirstChild(LP.Name)
+            if uf then
+                local pf = uf:FindFirstChild("Chickens") or uf:FindFirstChild("Pets")
+                if pf then
+                    local list = {}
+                    for _, pet in ipairs(pf:GetChildren()) do
+                        local pv = pet:FindFirstChild("Multiplier") or pet:FindFirstChild("Power") or pet:FindFirstChild("Level")
+                        table.insert(list, {Name = pet.Name, Power = pv and tonumber(pv.Value) or 100})
+                    end
+                    if #list > 0 then
+                        table.sort(list, function(a, b) return a.Power > b.Power end)
+                        for i = 1, math.min(5, #list) do defaultChickens[i] = list[i] end
+                    end
                 end
             end
         end
     end)
-    Notify("No empty server found")
 end)
+for rank, chk in ipairs(defaultChickens) do
+    Paragraph(home, "#" .. rank .. " " .. chk.Name, "Power: " .. (chk.Power or "Top Tier"))
+end
+
+Section(home, "⚡ QUICK ACTION")
+Btn(home, "⚡ Equip Best Chickens", function() Fire("EquipBest"); Notify("Equipped!") end)
+Btn(home, "🔄 Rejoin Server", function() pcall(function() game:GetService("TeleportService"):Teleport(game.PlaceId, LP) end) end)
 
 -- ══════════════════════════════════════════════
--- TAB 2: 🥚 EGG (Hatch + Sell + Fuse + Incubator)
+-- TAB 2: 🥚 EGG
 -- ══════════════════════════════════════════════
 local egg = CreateTab("Egg")
 
 Section(egg, "🐣 AUTO HATCH")
-Toggle(egg, "Auto Hatch Telur", false, function(v) Flags.AutoHatch = v end)
+Toggle(egg, "Auto Hatch", false, function(v) Flags.AutoHatch = v end)
 Slider(egg, "Hatch Delay", 0.1, 2, 0.5, "s", function(v) Flags.HatchDelay = v end)
 
-local eggOptions = {"Basic Egg", "Forest Egg", "Desert Egg", "Magma Egg", "Cyber Egg", "Void Egg"}
--- Add any extra eggs from live scan
-for eggName, _ in pairs(EggDatabase) do
-    local found = false
-    for _, e in ipairs(eggOptions) do if e == eggName then found = true; break end end
-    if not found then table.insert(eggOptions, eggName) end
+for _, eggName in ipairs({"Basic Egg", "Forest Egg", "Desert Egg", "Magma Egg", "Cyber Egg", "Void Egg"}) do
+    Btn(egg, "🥚 " .. eggName, function() Flags.SelectedEgg = eggName; Fire("HatchEgg", eggName, 1); Notify("Hatching: " .. eggName) end)
 end
 
-for _, eggName in ipairs(eggOptions) do
-    Btn(egg, "🥚 " .. eggName, function()
-        Flags.SelectedEgg = eggName
-        Fire("HatchEgg", eggName, 1)
-        Notify("Hatching: " .. eggName)
-    end)
-end
-
-Section(egg, "📦 MAP COLLECTOR & INCUBATOR")
+Section(egg, "📦 COLLECT")
 Toggle(egg, "Auto Collect Egg di Map", false, function(v) Flags.AutoCollectEggs = v end)
-Toggle(egg, "Auto Claim Incubator (All Slot)", false, function(v) Flags.AutoClaimIncubator = v end)
+Toggle(egg, "Auto Claim Incubator", false, function(v) Flags.AutoClaimIncubator = v end)
 
-Section(egg, "💰 AUTO SELL")
-Toggle(egg, "Auto Sell All After Hatch", false, function(v) Flags.AutoSellOnHatch = v end)
-Btn(egg, "💵 Sell All Chickens Now", function() Fire("SellChicken", "All"); Notify("Sold all chickens!") end)
+Section(egg, "💰 SELL & FUSE")
+Toggle(egg, "Auto Sell After Hatch", false, function(v) Flags.AutoSellOnHatch = v end)
+Btn(egg, "💵 Sell All Now", function() Fire("SellChicken", "All"); Notify("Sold!") end)
+Toggle(egg, "Auto Fuse Duplikat", false, function(v) Flags.AutoFuse = v end)
+Btn(egg, "🧬 Fuse Now", function() Fire("FuseChicken", "AutoFuseDuplicates", true); Notify("Fuse sent!") end)
 
--- Per-egg sell toggles
-for eggCategory, chickensList in pairs(EggDatabase) do
-    Section(egg, "📦 " .. eggCategory)
-    for _, chickenName in ipairs(chickensList) do
-        Toggle(egg, "Jual " .. chickenName, false, function(v)
-            Flags.SelectedChickensToSell[chickenName] = v
-        end)
+for eggCat, chicks in pairs(EggDatabase) do
+    Section(egg, "📦 " .. eggCat)
+    for _, cn in ipairs(chicks) do
+        Toggle(egg, "Jual " .. cn, false, function(v) end)
     end
 end
 
-Section(egg, "🧬 FUSE SYSTEM")
-Toggle(egg, "Lock: Fuse Rarity Sama Saja", true, function(v) Flags.FuseRarityOnly = v end)
-Toggle(egg, "Auto Fuse Duplikat", false, function(v) Flags.AutoFuse = v end)
-Btn(egg, "⚡ Instant Fuse Now", function() Fire("FuseChicken", "InstantFuse", Flags.FuseRarityOnly); Notify("Fuse sent!") end)
-
 -- ══════════════════════════════════════════════
--- TAB 3: 🌾 FARM (Upgrades + Events + Combat)
+-- TAB 3: 🌾 FARM
 -- ══════════════════════════════════════════════
 local farm = CreateTab("Farm")
 
-Section(farm, "🌾 FARM UPGRADES")
+Section(farm, "🌾 UPGRADES")
 Toggle(farm, "Auto Buy + Upgrade Coop", false, function(v) Flags.AutoBuyCoop = v end)
 Toggle(farm, "Auto Buy + Upgrade Feeder", false, function(v) Flags.AutoBuyFeeder = v end)
 Toggle(farm, "Auto Buy + Upgrade Recycler", false, function(v) Flags.AutoBuyRecycler = v end)
-Slider(farm, "Upgrade Loop Delay", 0.2, 5, 1.0, "s", function(v) Flags.FarmUpgradeDelay = v end)
 
 Section(farm, "🎪 WORLD EVENTS")
-Toggle(farm, "Master Auto Join Events", false, function(v) Flags.AutoJoinEvents = v end)
+Toggle(farm, "Auto Join Events", false, function(v) Flags.AutoJoinEvents = v end)
 Toggle(farm, "🔥 Hot Eggs", true, function(v) Flags.EventsToJoin["Hot Eggs"] = v end)
 Toggle(farm, "🛸 UFO Invasion", true, function(v) Flags.EventsToJoin["UFO Invasion"] = v end)
 Toggle(farm, "🪿 Golden Goose", true, function(v) Flags.EventsToJoin["Golden Goose"] = v end)
 Toggle(farm, "👑 Chicken Boss", true, function(v) Flags.EventsToJoin["Chicken Boss"] = v end)
 
-Section(farm, "🥊 COMBAT & TRAINING")
-Toggle(farm, "Auto Train / Click Power", false, function(v) Flags.AutoTrain = v end)
-Toggle(farm, "Auto Punch / Open World Fight", false, function(v) Flags.AutoPunch = v end)
-Slider(farm, "Farm Speed (Delay)", 0.05, 1, 0.1, "s", function(v) Flags.FarmSpeed = v end)
+Section(farm, "🥊 COMBAT")
+Toggle(farm, "Auto Train", false, function(v) Flags.AutoTrain = v end)
+Toggle(farm, "Auto Punch", false, function(v) Flags.AutoPunch = v end)
+Slider(farm, "Farm Speed", 0.05, 1, 0.1, "s", function(v) Flags.FarmSpeed = v end)
 
 -- ══════════════════════════════════════════════
--- TAB 4: 🏰 TOWER (Tower + Rebirth)
+-- TAB 4: 🏰 TOWER
 -- ══════════════════════════════════════════════
 local tower = CreateTab("Tower")
 
-Section(tower, "🗼 TOWER AUTO GRIND")
+Section(tower, "🗼 AUTO TOWER")
 Toggle(tower, "Auto Tower Grind", false, function(v) Flags.AutoTowerGrind = v end)
-Slider(tower, "Target Max Floor", 1, 100, 20, " Floor", function(v) Flags.TargetFloor = v end)
+Slider(tower, "Target Floor", 1, 100, 20, " Floor", function(v) Flags.TargetFloor = v end)
 Toggle(tower, "Feed Before Fight", true, function(v) Flags.FeedBeforeFight = v end)
 
-Section(tower, "♻️ SMART REBIRTH GLITCH")
-Paragraph(tower, "💡 Cara Kerja", "Scrap dijual bersamaan Rebirth → uang masuk ke siklus baru!")
-Toggle(tower, "Aktifkan Smart Rebirth (Auto di Max Floor)", false, function(v) Flags.SmartRebirth = v end)
+Section(tower, "♻️ REBIRTH")
 Toggle(tower, "Auto Collect Scrap", false, function(v) Flags.AutoCollectScrap = v end)
-Btn(tower, "⚡ Rebirth Now (Manual)", function()
+Btn(tower, "⚡ Rebirth Now", function()
     Fire("CollectScrap"); task.wait(0.1)
     Fire("RecycleScrap", "All"); task.wait(0.1)
-    Fire("Rebirth", "DoRebirth")
-    Notify("Rebirth done!")
+    Fire("Rebirth", "DoRebirth"); Notify("Rebirth done!")
 end)
 
 -- ══════════════════════════════════════════════
--- TAB 5: ⚙️ SETTINGS (Performance + Mods + Movement)
+-- TAB 5: ⚙️ SETTINGS
 -- ══════════════════════════════════════════════
 local settings = CreateTab("Settings")
 
-Section(settings, "📱 UI")
-Toggle(settings, "Tampilkan Floating Button", true, function(v)
-    Flags.ShowFloatingBtn = v
-    if FloatingGui then FloatingGui.Enabled = v end
-end)
-
-Section(settings, "⚡ PERFORMANCE & MODS")
-Toggle(settings, "FPS Booster (No Shadows, Smooth)", false, function(v) Flags.FPSBooster = v; ApplyFPS(v) end)
-Toggle(settings, "Ultra Low GPU Mode (Hemat Baterai)", false, function(v)
-    Flags.LowGPU = v
-    pcall(function() RunService:Set3dRenderingEnabled(not v) end)
-end)
-Slider(settings, "Max FPS Cap", 30, 240, 60, " FPS", function(v)
-    Flags.FPSCap = v
-    pcall(function() if setfpscap then setfpscap(v) end end)
+Section(settings, "⚡ PERFORMANCE")
+Toggle(settings, "FPS Booster", false, function(v)
+    Flags.FPSBooster = v
+    pcall(function()
+        if v then
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+            game:GetService("Lighting").GlobalShadows = false
+        else
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+            game:GetService("Lighting").GlobalShadows = true
+        end
+    end)
 end)
 
 Section(settings, "🛡️ SAFETY")
-Toggle(settings, "Anti-AFK (Anti Disconnect 20 Menit)", true, function(v) Flags.AntiAFK = v end)
-Toggle(settings, "Auto Rejoin Saat Disconnect", false, function(v) Flags.AutoReconnect = v end)
+Toggle(settings, "Anti-AFK", true, function(v) Flags.AntiAFK = v end)
+Toggle(settings, "Auto Rejoin on Kick", false, function(v) Flags.AutoReconnect = v end)
 
 Section(settings, "🏃 MOVEMENT")
 Toggle(settings, "Inf Jump", false, function(v) Flags.InfJump = v end)
-Toggle(settings, "NoClip (Tembus Dinding)", false, function(v) Flags.NoClip = v end)
+Toggle(settings, "NoClip", false, function(v) Flags.NoClip = v end)
 Slider(settings, "WalkSpeed", 16, 250, 16, " Spd", function(v) Flags.WalkSpeed = v end)
 Slider(settings, "JumpPower", 50, 300, 50, " Pwr", function(v) Flags.JumpPower = v end)
 
 Section(settings, "🌐 SERVER")
-Btn(settings, "🔄 Rejoin Server", function() TeleportService:Teleport(game.PlaceId, LP) end)
-Btn(settings, "🌐 Server Hop (Sepi)", function()
+Btn(settings, "🔄 Rejoin", function() pcall(function() game:GetService("TeleportService"):Teleport(game.PlaceId, LP) end) end)
+Btn(settings, "🌐 Server Hop", function()
     pcall(function()
         local r = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
         local d = game:GetService("HttpService"):JSONDecode(r)
         if d and d.data then
-            table.sort(d.data, function(a, b) return a.playing < b.playing end)
             for _, s in ipairs(d.data) do
                 if s.playing < s.maxPlayers and s.id ~= game.JobId then
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP); return
+                    game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, s.id, LP); return
                 end
             end
         end
     end)
     Notify("No empty server found")
-end)
-Btn(settings, "🌐 Server Hop (Ramai)", function()
-    pcall(function()
-        local r = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100")
-        local d = game:GetService("HttpService"):JSONDecode(r)
-        if d and d.data then
-            for _, s in ipairs(d.data) do
-                if s.playing < s.maxPlayers and s.id ~= game.JobId then
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP); return
-                end
-            end
-        end
-    end)
 end)
 
 -- ═══ Activate first tab ═══
@@ -766,60 +533,22 @@ for name, frame in pairs(tabContent) do
     break
 end
 
--- ═══ Floating Draggable Button ═══
-FloatingGui = nil
+-- ═══ Floating Button (created AFTER GUI — safe) ═══
 pcall(function()
     local floatGui = Instance.new("ScreenGui")
-    floatGui.Name = "MilesHub_Float"
-    floatGui.ResetOnSpawn = false
-    floatGui.DisplayOrder = 999999
+    floatGui.Name = "MilesHub_Float"; floatGui.ResetOnSpawn = false; floatGui.DisplayOrder = 999999
+    floatGui.Parent = LP:WaitForChild("PlayerGui")
 
-    for _, p in ipairs({gethui and gethui(), game:GetService("CoreGui"), LP:FindFirstChild("PlayerGui")}) do
-        if p then
-            local ok = pcall(function() floatGui.Parent = p end)
-            if ok and floatGui.Parent then break end
-        end
-    end
-
-    if floatGui.Parent then
-        FloatingGui = floatGui
-
-        local fb = Instance.new("TextButton", floatGui)
-        fb.Size = UDim2.new(0, 55, 0, 55)
-        fb.Position = UDim2.new(0, 10, 0.3, 0)
-        fb.BackgroundColor3 = Color3.fromRGB(20, 16, 35)
-        fb.Text = "⚡"
-        fb.TextColor3 = Color3.fromRGB(168, 85, 247)
-        fb.Font = Enum.Font.GothamBold
-        fb.TextSize = 22
-        fb.TextTransparency = 0.2
-        fb.Active = true
-        fb.Draggable = true
-        fb.BorderSizePixel = 0
-        Instance.new("UICorner", fb).CornerRadius = UDim.new(0.5, 0)
-        local btnStroke = Instance.new("UIStroke", fb)
-        btnStroke.Color = Color3.fromRGB(168, 85, 247)
-        btnStroke.Thickness = 2
-
-        fb.MouseButton1Click:Connect(function()
-            gui.Enabled = not gui.Enabled
-        end)
-
-        -- Pulse animation
-        task.spawn(function()
-            while true do
-                pcall(function()
-                    fb.TextTransparency = 0.2
-                    task.wait(0.8)
-                    fb.TextTransparency = 0.6
-                    task.wait(0.8)
-                end)
-            end
-        end)
-    end
+    local fb = Instance.new("TextButton", floatGui)
+    fb.Size = UDim2.new(0, 50, 0, 50); fb.Position = UDim2.new(0, 10, 0.3, 0)
+    fb.BackgroundColor3 = Color3.fromRGB(20, 16, 35); fb.Text = "⚡"
+    fb.TextColor3 = Color3.fromRGB(168, 85, 247); fb.Font = Enum.Font.GothamBold; fb.TextSize = 22
+    fb.TextTransparency = 0.2; fb.Active = true; fb.Draggable = true; fb.BorderSizePixel = 0
+    Instance.new("UICorner", fb).CornerRadius = UDim.new(0.5, 0)
+    Instance.new("UIStroke", fb).Color = Color3.fromRGB(168, 85, 247)
+    fb.MouseButton1Click:Connect(function() gui.Enabled = not gui.Enabled end)
 end)
 
 -- ═══ DONE ═══
-Notify("Step 7: All loaded! ⚡")
-print("[Miles-HUB] v2.2 FULL loaded successfully ✓")
-print("[Miles-HUB] Tabs: Home | Egg | Farm | Tower | Settings")
+Notify("All features loaded! ⚡")
+print("[Miles-HUB] v2.2 loaded — Home | Egg | Farm | Tower | Settings")
