@@ -450,56 +450,65 @@ local function ser(v, d)
 end
 
 local dataLines = {}
+local function scanOneLevel(root, max)
+    local n = 0
+    for _, c in ipairs(root:GetChildren()) do
+        if n >= max then break end
+        n = n + 1
+        table.insert(dataLines, c.Name .. " [" .. c.ClassName .. "]")
+    end
+end
 local function ScanData()
     dataLines = {}
-    local cap = 2000
-    local tree = nil
-    tree = function(obj, depth)
-        if #dataLines >= cap then return end
-        for _, c in ipairs(obj:GetChildren()) do
-            if #dataLines >= cap then return end
-            if c.Name:find("Pose") or c.Name:find("Armature") or c.Name:find("Initial")
-            or c.Name == "PlayerModule" or c.Name == "Components" then
-                -- skip animation noise + stock Roblox modules
-            else
-                local val = ""
-                if c:IsA("ValueBase") then val = " = " .. ser(c.Value, 2) end
-                table.insert(dataLines, string.rep("  ", depth) .. c.Name .. " [" .. c.ClassName .. "]" .. val)
-                if not c:IsA("Part") and not c:IsA("MeshPart") and not c:IsA("SurfaceGui") and not c:IsA("LocalScript") then
-                    tree(c, depth + 1)
-                end
+    table.insert(dataLines, "== ReplicatedStorage top ==")
+    scanOneLevel(ReplicatedStorage, 50)
+    local assets = ReplicatedStorage:FindFirstChild("Assets")
+    if assets then
+        table.insert(dataLines, "== Assets children ==")
+        scanOneLevel(assets, 60)
+        for _, c in ipairs(assets:GetChildren()) do
+            if c:IsA("Folder") or c:IsA("Configuration") then
+                table.insert(dataLines, "  -- " .. c.Name .. " --")
+                scanOneLevel(c, 40)
             end
         end
     end
-    table.insert(dataLines, "== Player " .. LP.Name .. " ==")
-    tree(LP, 0)
-    table.insert(dataLines, "")
-    table.insert(dataLines, "== ReplicatedStorage ==")
-    tree(ReplicatedStorage, 0)
+    table.insert(dataLines, "== workspace top ==")
+    scanOneLevel(game.Workspace, 60)
     dataLbl.Text = table.concat(dataLines, "\n")
-    -- Query server config (egg names, rebirth req, prices...)
+    -- Rebirth window text (floor requirement, progress, bonus)
     pcall(function()
-        local keysRemote = Remotes["ConfigGetFlagKeys"]
-        if not keysRemote or keysRemote:IsA("RemoteEvent") then return end
-        local ok, keys = pcall(function() return keysRemote:InvokeServer() end)
-        if not ok or type(keys) ~= "table" then
-            table.insert(dataLines, "cfg: ConfigGetFlagKeys = (n/a)")
+        local rb = LP.PlayerGui:FindFirstChild("Rebirth")
+        if rb then
+            local req = rb:FindFirstChild("Frame") and rb.Frame:FindFirstChild("window")
+            local text = ""
+            if req then
+                local bar = req:FindFirstChild("panel") and req.panel:FindFirstChild("content")
+                if bar then
+                    local t = bar:FindFirstChild("content") and bar.content:FindFirstChild("body")
+                    if t then
+                        local rc = t:FindFirstChild("reqCard")
+                        if rc then
+                            local lbl = rc:FindFirstChild("face") and rc.face:FindFirstChild("content")
+                            if lbl then
+                                local x = lbl:FindFirstChild("bar")
+                                if x then
+                                    local tl = x:FindFirstChild("text")
+                                    if tl and tl:IsA("TextLabel") then text = tl.Text end
+                                end
+                            end
+                        end
+                        local cn = t:FindFirstChild("count")
+                        if cn then
+                            local tl = cn:FindFirstChild("s2")
+                            if tl and tl:IsA("TextLabel") then text = text .. " | progress: " .. tl.Text end
+                        end
+                    end
+                end
+            end
+            table.insert(dataLines, "== Rebirth window ==")
+            table.insert(dataLines, "reqText: " .. text)
             dataLbl.Text = table.concat(dataLines, "\n")
-            return
-        end
-        table.insert(dataLines, "cfg: " .. tostring(#keys) .. " keys available")
-        dataLbl.Text = table.concat(dataLines, "\n")
-        local n = 0
-        for _, k in ipairs(keys) do
-            if n >= 100 then break end
-            n = n + 1
-            task.spawn(function()
-                local rd = Remotes["ConfigGetParam"]
-                if not rd or rd:IsA("RemoteEvent") then return end
-                local s = pcall(function() return rd:InvokeServer(k) end)
-                table.insert(dataLines, "cfg." .. tostring(k) .. " = " .. (select(1, s) and ser(select(2, s), 4) or "(error)"))
-                dataLbl.Text = table.concat(dataLines, "\n")
-            end)
         end
     end)
 end
