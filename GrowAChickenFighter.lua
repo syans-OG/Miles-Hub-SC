@@ -25,13 +25,19 @@ local function addPad(p,t,b,l,r) local u=Instance.new("UIPadding"); u.PaddingTop
 local function addList(p,spd) local l=Instance.new("UIListLayout"); l.Padding=UDim.new(0,spd or 6); l.SortOrder=Enum.SortOrder.LayoutOrder; l.Parent=p end
 
 local function safeNotify(opts)
-    pcall(function()
+    local text = opts.Content or opts.Text or ""
+    local title = opts.Title or "Miles-HUB"
+    -- Method 1: StarterGui:SetCore (works on most PC executors)
+    local ok = pcall(function()
         StarterGui:SetCore("SendNotification", {
-            Title = opts.Title or "Miles-HUB",
-            Text = opts.Content or opts.Text or "",
+            Title = title,
+            Text = text,
             Duration = opts.Duration or 3
         })
     end)
+    if ok then return end
+    -- Method 2: Fallback — always print to console
+    print("[Miles-HUB] " .. title .. ": " .. text)
 end
 
 local Rayfield = {}
@@ -45,7 +51,24 @@ function Rayfield:CreateWindow(opts)
     w.Gui.ResetOnSpawn = false
     w.Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     w.Gui.DisplayOrder = 999999
-    w.Gui.Parent = game:GetService("CoreGui")
+    -- Mobile-safe: try multiple parents (CoreGui often blocked on mobile executors)
+    local guiOk = false
+    local parentList = {}
+    if gethui and type(gethui) == "function" then
+        local ok2, hui = pcall(gethui)
+        if ok2 and hui then table.insert(parentList, hui) end
+    end
+    table.insert(parentList, game:GetService("CoreGui"))
+    table.insert(parentList, LocalPlayer:WaitForChild("PlayerGui", 5))
+    for _, parent in ipairs(parentList) do
+        if parent then
+            local ok = pcall(function() w.Gui.Parent = parent end)
+            if ok and w.Gui.Parent then guiOk = true break end
+        end
+    end
+    if not guiOk then
+        warn("[Miles-HUB] Cannot create GUI — all parent containers failed")
+    end
 
     w.Main = Instance.new("Frame")
     w.Main.Size = UDim2.new(0, 520, 0, 380)
@@ -187,7 +210,7 @@ _G._MilesRayfield = Rayfield
 
 print("[Miles-HUB] Fetching game script...")
 local ok, src = pcall(game.HttpGet, game,
-    "https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_original.lua")
+    "https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_combined.lua")
 
 if not ok or not src then
     warn("[Miles-HUB] Fetch failed:", src)
