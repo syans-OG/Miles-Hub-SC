@@ -1,3 +1,52 @@
+-- ══════════════════════════════════════════════
+-- ⚡ Miles-HUB v2.2 — Grow A Chicken Fighter
+-- Self-contained (no external dependencies)
+-- ══════════════════════════════════════════════
+
+-- Immediate visual confirmation that script loaded
+pcall(function()
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "MilesHub_LoadConfirm"
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.DisplayOrder = 999999
+    -- Try multiple parents for mobile compatibility
+    for _, p in ipairs({
+        gethui and gethui(),
+        game:GetService("CoreGui"),
+        game:GetService("StarterGui"),
+        game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"),
+    }) do
+        if p then
+            local ok = pcall(function() sg.Parent = p end)
+            if ok and sg.Parent then break end
+        end
+    end
+    if sg.Parent then
+        local f = Instance.new("Frame")
+        f.Size = UDim2.new(0, 280, 0, 50)
+        f.Position = UDim2.new(0.5, -140, 0, 10)
+        f.BackgroundColor3 = Color3.fromRGB(20, 16, 35)
+        f.BorderSizePixel = 0
+        f.Parent = sg
+        Instance.new("UICorner", f).CornerRadius = UDim.new(0, 10)
+        local s = Instance.new("UIStroke", f)
+        s.Color = Color3.fromRGB(168, 85, 247)
+        s.Thickness = 2
+        local t = Instance.new("TextLabel")
+        t.Size = UDim2.new(1, -16, 1, 0)
+        t.Position = UDim2.new(0, 8, 0, 0)
+        t.BackgroundTransparency = 1
+        t.Text = "⚡ Miles-HUB v2.2 Loaded!"
+        t.TextColor3 = Color3.fromRGB(168, 85, 247)
+        t.Font = Enum.Font.GothamBold
+        t.TextSize = 14
+        t.Parent = f
+        task.delay(4, function() pcall(function() sg:Destroy() end) end)
+    end
+end)
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -51,10 +100,30 @@ function Rayfield:CreateWindow(opts)
     w.Gui.ResetOnSpawn = false
     w.Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     w.Gui.DisplayOrder = 999999
-    w.Gui.Parent = game:GetService("CoreGui")
+    -- Mobile-safe: try multiple parents (CoreGui often blocked on mobile executors)
+    local success = false
+    for _, parent in ipairs({
+        gethui and gethui(),
+        game:GetService("CoreGui"),
+        game:GetService("StarterGui"),
+        LocalPlayer:WaitForChild("PlayerGui"),
+    }) do
+        if parent then
+            local ok = pcall(function() w.Gui.Parent = parent end)
+            if ok and w.Gui.Parent then success = true break end
+        end
+    end
+    if not success then
+        warn("[Miles-HUB] Cannot create GUI — all parent containers failed")
+        return setmetatable({}, {__index = Rayfield})
+    end
+    -- Responsive size for mobile
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    local guiW = isMobile and 340 or 520
+    local guiH = isMobile and 260 or 380
     w.Main = Instance.new("Frame")
-    w.Main.Size = UDim2.new(0, 520, 0, 380)
-    w.Main.Position = UDim2.new(0.5,-260, 0.5,-190)
+    w.Main.Size = UDim2.new(0, guiW, 0, guiH)
+    w.Main.Position = UDim2.new(0.5, -guiW/2, 0.5, -guiH/2)
     w.Main.BackgroundColor3 = COLORS.Background
     w.Main.BorderSizePixel = 0
     w.Main.Active = true

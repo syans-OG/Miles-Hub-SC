@@ -1,12 +1,11 @@
---[[ ⚡ Miles-HUB v2.2 — Self-Contained Loader ]]
--- Original script now includes Rayfield UI inline.
--- Just fetch & execute.
+--[[ ⚡ Miles-HUB v2.2 — Mobile-Compatible Loader ]]
+-- Works on cloud phone / mobile executors
 
 -- ============ SCRIPT URL ============
 local SCRIPT_URL = "https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_original.lua"
 -- ====================================
 
--- Anti-detection hooks
+-- Anti-detection hooks (safe on mobile)
 pcall(function()
     if hookmetamethod then
         local orig
@@ -20,12 +19,58 @@ pcall(function()
     end
 end)
 
+-- Mobile-safe HTTP fetch (try multiple methods)
+local function safeHttpGet(url)
+    -- Method 1: game:HttpGet (standard)
+    local ok, result = pcall(function() return game:HttpGet(url) end)
+    if ok and result and #result > 100 then return result end
+
+    -- Method 2: game.HttpGetAsync
+    ok, result = pcall(function() return game:HttpGetAsync(url) end)
+    if ok and result and #result > 100 then return result end
+
+    -- Method 3: syn.request / http_request
+    ok, result = pcall(function()
+        if syn and syn.request then
+            local r = syn.request({Url = url, Method = "GET"})
+            return r.Body
+        elseif http_request then
+            local r = http_request({Url = url, Method = "GET"})
+            return r.Body
+        end
+    end)
+    if ok and result and #result > 100 then return result end
+
+    -- Method 4: fluxus request
+    ok, result = pcall(function()
+        if fluxus and fluxus.request then
+            local r = fluxus.request({Url = url, Method = "GET"})
+            return r.Body
+        end
+    end)
+    if ok and result and #result > 100 then return result end
+
+    return nil
+end
+
 -- Fetch & execute
 print("[Miles-HUB] Fetching script...")
-local ok, src = pcall(game.HttpGet, game, SCRIPT_URL)
+local src = safeHttpGet(SCRIPT_URL)
 
-if not ok or not src then
-    warn("[Miles-HUB] Fetch failed:", src)
+if not src then
+    warn("[Miles-HUB] All HTTP methods failed. Trying direct loadstring fallback...")
+    -- Last resort: try loadstring with game:HttpGet inside pcall
+    local ok2, err2 = pcall(function()
+        local code = game:HttpGet(SCRIPT_URL)
+        if code and #code > 100 then
+            loadstring(code)()
+        end
+    end)
+    if not ok2 then
+        warn("[Miles-HUB] Fallback also failed:", err2)
+        warn("[Miles-HUB] Your executor may not support HttpGet.")
+        warn("[Miles-HUB] Try pasting the full script directly instead.")
+    end
     return
 end
 
