@@ -254,7 +254,7 @@ end
 local Flags = {
     AutoCollect = false, AutoClaimIncubator = false,
     AutoHatch = false, SelectedEgg = "nest", HatchDelay = 0.5, HatchCount = 1,
-    AutoSell = false, AutoFuse = false, ChickenIds = {},
+    AutoSell = false, AutoFuse = false, ChickenIds = {}, AutoActive = false,
     AutoCoop = false, AutoFeeder = false, AutoRecycler = false,
     AutoTower = false, TargetFloor = 25, FeedBefore = false, AutoRebirth = false,
     AutoEvents = false, Events = {["Hot Eggs"] = true, ["UFO Invasion"] = true, ["Golden Goose"] = true, ["Chicken Boss"] = true},
@@ -394,6 +394,15 @@ idsSt.MouseButton1Click:Connect(function()
     end
     Notify("Chicken ids: " .. #Flags.ChickenIds)
 end)
+Btn(egg, "Set Active Chicken (id#1)", function()
+    if Flags.ChickenIds[1] then
+        SetStatus("Active", Try("SetActiveChicken", Flags.ChickenIds[1]))
+        RefreshStatus()
+    else
+        Notify("Set chicken ids first")
+    end
+end)
+Toggle(egg, "Auto Set Active (id#1)", false, function(v) Flags.AutoActive = v end)
 
 -- --- TAB: FARM ---
 local farm = CreateTab("Farm")
@@ -644,6 +653,20 @@ task.spawn(function()
                 SetStatus("Fuse", Try("FuseChickens", a, b, {}, "a"))
             else
                 SetStatus("Fuse", "need >= 2 ids")
+            end
+            RefreshStatus()
+        end
+    end
+end)
+
+-- Auto set active chicken (id#1)
+task.spawn(function()
+    while task.wait(5) do
+        if Flags.AutoActive then
+            if Flags.ChickenIds[1] then
+                SetStatus("Active", Try("SetActiveChicken", Flags.ChickenIds[1]))
+            else
+                SetStatus("Active", "no ids")
             end
             RefreshStatus()
         end
