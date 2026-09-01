@@ -287,16 +287,42 @@ local function ScanRemotes()
 end
 ScanRemotes()
 
+-- Fire capture bypass (set true so the namecall hook skips our own calls)
+SelfFire = false
+
 local function Fire(name, ...)
     local r = Remotes[name]
     if not r then return false end
     local args = { ... }
     task.wait(math.random(100, 400) / 1000)
-    pcall(function()
+    SelfFire = true
+    local ok = pcall(function()
         if r:IsA("RemoteEvent") then r:FireServer(unpack(args)) else r:InvokeServer(unpack(args)) end
     end)
-    return true
+    SelfFire = false
+    return ok
 end
+
+-- Capture game's real FireServer/InvokeServer args (debug: find exact remote contracts)
+local captureOn = false
+local captured = {}
+pcall(function()
+    if not hookmetamethod or not getnamecallmethod then return end
+    local oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if captureOn and not SelfFire and (method == "FireServer" or method == "InvokeServer") then
+            local args = { ... }
+            local line = tostring(self) .. "("
+            for i, a in ipairs(args) do
+                line = line .. (i > 1 and ", " or "")
+                    .. (typeof(a) == "Instance" and a.ClassName or ser(a, 4))
+            end
+            captured[#captured + 1] = line .. ")"
+            if #captured > 80 then table.remove(captured, 1) end
+        end
+        return oldNamecall(self, ...)
+    end)
+end)
 
 local function Try(name, ...)
     if Fire(name, ...) then return "fired" end
@@ -613,6 +639,20 @@ local function OpenRailAndDump(railName)
 end
 Btn(debugTab, "Open Shop > Dump", function() OpenRailAndDump("Shop") end)
 Btn(debugTab, "Open Flock > Dump", function() OpenRailAndDump("Flock") end)
+
+local capBtn = nil
+capBtn = Btn(debugTab, "CAPTURE FIRES: OFF", function()
+    captureOn = not captureOn
+    capBtn.Text = "CAPTURE FIRES: " .. (captureOn and "ON" or "OFF")
+    Notify(captureOn and "Capturing remote args" or "Capture off")
+end)
+Btn(debugTab, "Show Captured", function()
+    local t = captured
+    if #t == 0 then t = { "(no captures yet)" } end
+    dataLines = t
+    dataLbl.Text = table.concat(t, "\n")
+    Notify(#t .. " captured")
+end)
 
 -- Activate first tab
 for name, frame in pairs(tabContent) do
