@@ -1,23 +1,12 @@
 --[[ ⚡ Miles-HUB v2.2 — Mobile-Compatible Loader ]]
 -- Works on cloud phone / mobile executors
+-- NOTE: hookmetamethod REMOVED — it triggers Byfron anti-cheat kicks
 
 -- ============ SCRIPT URL ============
 local SCRIPT_URL = "https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_original.lua"
 -- ====================================
 
--- Anti-detection hooks (safe on mobile)
-pcall(function()
-    if hookmetamethod then
-        local orig
-        orig = hookmetamethod(game, "__namecall", function(self, ...)
-            local method = getnamecallmethod()
-            if tostring(method):lower() == "kick" and self == game:GetService("Players").LocalPlayer then
-                return nil
-            end
-            return orig(self, ...)
-        end)
-    end
-end)
+-- NO hookmetamethod — this was causing the kick!
 
 -- Mobile-safe HTTP fetch (try multiple methods)
 local function safeHttpGet(url)
@@ -59,7 +48,6 @@ local src = safeHttpGet(SCRIPT_URL)
 
 if not src then
     warn("[Miles-HUB] All HTTP methods failed. Trying direct loadstring fallback...")
-    -- Last resort: try loadstring with game:HttpGet inside pcall
     local ok2, err2 = pcall(function()
         local code = game:HttpGet(SCRIPT_URL)
         if code and #code > 100 then
@@ -68,8 +56,6 @@ if not src then
     end)
     if not ok2 then
         warn("[Miles-HUB] Fallback also failed:", err2)
-        warn("[Miles-HUB] Your executor may not support HttpGet.")
-        warn("[Miles-HUB] Try pasting the full script directly instead.")
     end
     return
 end

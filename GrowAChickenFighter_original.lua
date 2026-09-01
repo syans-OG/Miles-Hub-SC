@@ -63,6 +63,9 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
+-- Small delay to avoid rate-based anti-cheat detection
+task.wait(0.5)
+
 local SessionStartTime = os.time()
 local SessionEggsHatched = 0
 local SessionRebirths = 0
@@ -371,7 +374,7 @@ local Flags = {
     FPSBooster = false,
     LowGPUMode = false,
     FPSCap = 60,
-    AutoReconnect = true,
+    AutoReconnect = false, -- Disabled: can cause re-kick loop with anti-cheat
     ShowFloatingButton = true,
 
     AutoJoinEvents = false,
@@ -455,7 +458,7 @@ local Remotes = {
 
 local function SafeInvoke(remote, ...)
     if not remote then return false end
-    local jitter = math.random(1, 15) / 1000
+    local jitter = math.random(10, 80) / 1000
     task.wait(jitter)
 
     local ok, res = pcall(function(...)
@@ -469,6 +472,7 @@ local function SafeInvoke(remote, ...)
 end
 
 local function TriggerPromptByName(targetKeywords)
+    if not fireproximityprompt then return end
     for _, prompt in ipairs(workspace:GetDescendants()) do
         if prompt:IsA("ProximityPrompt") then
             local parentName = (prompt.Parent and prompt.Parent.Name or ""):lower()
@@ -478,6 +482,7 @@ local function TriggerPromptByName(targetKeywords)
                     pcall(function()
                         fireproximityprompt(prompt)
                     end)
+                    task.wait(0.05)
                 end
             end
         end
@@ -619,9 +624,12 @@ local function CollectScrapInMap()
                 if string.find(nameLower, "scrap") or string.find(nameLower, "trash") or string.find(nameLower, "debris") then
                     local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
                     if part and (part.Position - HumanoidRootPart.Position).Magnitude <= Flags.CollectRadius * 2 then
-                        firetouchinterest(HumanoidRootPart, part, 0)
-                        task.wait(0.02)
-                        firetouchinterest(HumanoidRootPart, part, 1)
+                        if firetouchinterest then
+                            firetouchinterest(HumanoidRootPart, part, 0)
+                            task.wait(0.05)
+                            firetouchinterest(HumanoidRootPart, part, 1)
+                            task.wait(0.05)
+                        end
                     end
                 end
             end
@@ -644,9 +652,6 @@ local function TryJoinEvent(eventName)
                     if string.find(btnText, "join") or string.find(btnText, "enter") or string.find(btnText, "yes") or string.find(btnText, "go") then
                         pcall(function()
                             gui.MouseButton1Click:Fire()
-                            for _, connection in ipairs(getconnections(gui.MouseButton1Click)) do
-                                connection:Fire()
-                            end
                         end)
                     end
                 end
@@ -661,9 +666,11 @@ local function TryJoinEvent(eventName)
             if string.find(nameLower, cleanName) or (string.find(nameLower, "portal") and string.find(nameLower, eventName:lower():sub(1, 4))) then
                 local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
                 if part and Character and HumanoidRootPart then
-                    firetouchinterest(HumanoidRootPart, part, 0)
-                    task.wait(0.05)
-                    firetouchinterest(HumanoidRootPart, part, 1)
+                    if firetouchinterest then
+                        firetouchinterest(HumanoidRootPart, part, 0)
+                        task.wait(0.05)
+                        firetouchinterest(HumanoidRootPart, part, 1)
+                    end
                 end
             end
         end
@@ -839,9 +846,11 @@ task.spawn(function()
                         if string.find(nameLower, "egg") or string.find(nameLower, "pickup") or string.find(nameLower, "drop") then
                             local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
                             if part and (part.Position - HumanoidRootPart.Position).Magnitude <= Flags.CollectRadius then
-                                firetouchinterest(HumanoidRootPart, part, 0)
-                                task.wait(0.05)
-                                firetouchinterest(HumanoidRootPart, part, 1)
+                                if firetouchinterest then
+                                    firetouchinterest(HumanoidRootPart, part, 0)
+                                    task.wait(0.05)
+                                    firetouchinterest(HumanoidRootPart, part, 1)
+                                end
                             end
                         end
                     end
