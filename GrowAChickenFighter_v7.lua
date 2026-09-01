@@ -573,15 +573,56 @@ task.spawn(function()
     end
 end)
 
--- Auto Tower Grind + Feed Before
+-- Auto Tower Grind + Feed Before (event-driven: retreat/defeat handling)
+local towerState = { grinding = false, ready = true, floored = 0 }
+local function listenTower()
+    local function on(ev, fn)
+        local r = Remotes[ev]
+        if r and r:IsA("RemoteEvent") then
+            pcall(function() r.OnClientEvent:Connect(fn) end)
+        end
+    end
+    on("TowerFloorCleared", function() towerState.floored = towerState.floored + 1 end)
+    on("TowerRunStarted", function() towerState.floored = 0 end)
+    on("TowerDefeat", function()
+        towerState.grinding = false
+        towerState.ready = false
+        SetStatus("Tower", "defeat, waiting...")
+        RefreshStatus()
+        task.delay(math.random(6, 15), function() towerState.ready = true end)
+    end)
+    on("TowerContinueOffer", function()
+        Fire("TowerContinueDecline")
+        towerState.grinding = false
+        towerState.ready = false
+        SetStatus("Tower", "declined continue, waiting...")
+        RefreshStatus()
+        task.delay(math.random(5, 10), function() towerState.ready = true end)
+    end)
+end
+listenTower()
 task.spawn(function()
-    while task.wait(1.5) do
-        if Flags.AutoTower then
+    while task.wait(2) do
+        if Flags.AutoTower and towerState.ready then
             if Flags.FeedBefore then Fire("EncourageChicken") end
-            Fire("TowerStart")
+            if not towerState.grinding then
+                Fire("TowerStart")
+                towerState.grinding = true
+            end
             Fire("TowerElevator")
-            SetStatus("Tower", "fired")
+            if towerState.floored >= Flags.TargetFloor then
+                Fire("TowerSurrender")
+                if Flags.AutoRebirth then Fire("Rebirth") end
+                towerState.grinding = false
+                towerState.ready = false
+                SetStatus("Tower", "floor " .. towerState.floored .. "/" .. Flags.TargetFloor .. " reached, retreating")
+                task.delay(math.random(3, 8), function() towerState.ready = true end)
+            else
+                SetStatus("Tower", "floor " .. towerState.floored .. "/" .. Flags.TargetFloor)
+            end
             RefreshStatus()
+        elseif not Flags.AutoTower then
+            SetStatus("Tower", "off")
         end
     end
 end)
