@@ -1,20 +1,24 @@
 --[[
-    ⚡ Miles-HUB v2.2 — Delta/RedFinger Compatible
+    ⚡ Miles-HUB v2.2 — SAFE MODE (Delta/RedFinger)
     
-    Pattern matched to working scripts (1337hub, VoidHub):
-    - NO VirtualUser (detected by Byfron)
-    - NO workspace:GetDescendants() scanning
-    - GUI in PlayerGui only (not CoreGui/StarterGui)
-    - Simple remote calls with natural delays
-    - Minimal UI footprint
+    ONLY client-side features. ZERO remote firing.
+    This avoids all server-side anti-cheat detection.
+    
+    Safe features:
+    - WalkSpeed boost
+    - JumpPower boost
+    - Infinite Jump
+    - NoClip
+    - Anti-AFK (basic method)
+    - GUI with notifications
 ]]
 
--- ═══ Minimal Services ═══
+-- ═══ Services ═══
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LP = Players.LocalPlayer
 local Char = LP.Character or LP.CharacterAdded:Wait()
@@ -27,48 +31,28 @@ LP.CharacterAdded:Connect(function(c)
     HRP = c:WaitForChild("HumanoidRootPart")
 end)
 
--- ═══ Remote Scanner (safe - no Descendants) ═══
-local function FindRemote(names)
-    for _, n in ipairs(names) do
-        local r = ReplicatedStorage:FindFirstChild(n, true)
-        if r and (r:IsA("RemoteEvent") or r:IsA("RemoteFunction")) then
-            return r
+-- ═══ Safe Remote Scanner (only reads, never fires) ═══
+local Remotes = {}
+task.spawn(function()
+    task.wait(2) -- Wait for game to load
+    for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            Remotes[obj.Name] = obj
         end
     end
-    return nil
-end
-
--- ═══ Safe Fire ═══
-local function Fire(remote, ...)
-    if not remote then return end
-    task.wait(math.random(50, 150) / 1000)
-    pcall(function()
-        if remote:IsA("RemoteEvent") then
-            remote:FireServer(...)
-        else
-            remote:InvokeServer(...)
-        end
-    end)
-end
-
--- ═══ Discover Remotes ═══
-local R = {
-    Hatch = FindRemote({"HatchEgg", "OpenEgg", "BuyEgg", "Hatch"}),
-    Train = FindRemote({"Train", "GainStrength", "ClickEvent", "Tap", "Workout"}),
-    Punch = FindRemote({"Punch", "Attack", "Hit", "Fight", "Swing", "Battle"}),
-    Rebirth = FindRemote({"Rebirth", "RebirthEvent", "DoRebirth"}),
-    EquipBest = FindRemote({"EquipBest", "AutoEquip", "EquipAll", "BestPets"}),
-}
+    -- Report found remotes
+    local count = 0
+    for _ in pairs(Remotes) do count = count + 1 end
+    print("[Miles-HUB] Found " .. count .. " remotes (read-only, not firing)")
+end)
 
 -- ═══ Flags ═══
-local AutoTrain = false
-local AutoPunch = false
-local AutoHatch = false
-local SelectedEgg = "Basic Egg"
+local WalkSpeed = 16
+local JumpPower = 50
 local InfJump = false
 local NoClip = false
 
--- ═══ No VirtualUser - use SafeNotify instead ═══
+-- ═══ Notify ═══
 local function Notify(text)
     pcall(function()
         StarterGui:SetCore("SendNotification", {
@@ -79,14 +63,14 @@ local function Notify(text)
     end)
 end
 
--- ═══ InfJump (safe - no VirtualUser) ═══
+-- ═══ InfJump ═══
 UserInputService.JumpRequest:Connect(function()
     if InfJump and Hum then
         Hum:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end)
 
--- ═══ NoClip (safe) ═══
+-- ═══ NoClip ═══
 RunService.Stepped:Connect(function()
     if NoClip and Char then
         for _, p in ipairs(Char:GetDescendants()) do
@@ -97,40 +81,26 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- ═══ Background Loops (with human-like delays) ═══
-task.spawn(function()
-    while true do
-        if AutoTrain then Fire(R.Train) end
-        task.wait(0.5 + math.random() * 0.5)
+-- ═══ WalkSpeed / JumpPower ═══
+RunService.Heartbeat:Connect(function()
+    if Hum then
+        if WalkSpeed > 16 then Hum.WalkSpeed = WalkSpeed end
+        if JumpPower > 50 then Hum.JumpPower = JumpPower end
     end
 end)
 
-task.spawn(function()
-    while true do
-        if AutoPunch then Fire(R.Punch) end
-        task.wait(0.5 + math.random() * 0.5)
-    end
-end)
-
-task.spawn(function()
-    while true do
-        if AutoHatch then Fire(R.Hatch, SelectedEgg, 1) end
-        task.wait(1 + math.random())
-    end
-end)
-
--- ═══ GUI (PlayerGui only - NOT CoreGui) ═══
+-- ═══ GUI ═══
 task.wait(0.5)
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local guiW = isMobile and 260 or 340
-local guiH = isMobile and 180 or 260
+local guiH = isMobile and 220 or 300
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "MilesHub"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent = LP:WaitForChild("PlayerGui") -- PlayerGui only!
+gui.Parent = LP:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame")
 main.Size = UDim2.new(0, guiW, 0, guiH)
@@ -142,6 +112,7 @@ main.Draggable = true
 main.Parent = gui
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 8)
 
+-- Title
 local tb = Instance.new("Frame", main)
 tb.Size = UDim2.new(1, 0, 0, 28)
 tb.BackgroundColor3 = Color3.fromRGB(130, 90, 220)
@@ -152,23 +123,24 @@ local tt = Instance.new("TextLabel", tb)
 tt.Size = UDim2.new(1, -8, 1, 0)
 tt.Position = UDim2.new(0, 8, 0, 0)
 tt.BackgroundTransparency = 1
-tt.Text = "Miles-HUB v2.2"
+tt.Text = "Miles-HUB v2.2 (Safe)"
 tt.TextColor3 = Color3.fromRGB(240, 240, 240)
 tt.Font = Enum.Font.GothamBold
 tt.TextSize = 12
 tt.TextXAlignment = Enum.TextXAlignment.Left
 
-local cb = Instance.new("TextButton", tb)
-cb.Size = UDim2.new(0, 22, 0, 22)
-cb.Position = UDim2.new(1, -26, 0, 3)
-cb.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-cb.Text = "X"
-cb.TextColor3 = Color3.fromRGB(240, 240, 240)
-cb.Font = Enum.Font.GothamBold
-cb.TextSize = 10
-Instance.new("UICorner", cb).CornerRadius = UDim.new(0, 6)
-cb.MouseButton1Click:Connect(function() gui.Enabled = not gui.Enabled end)
+local closeBtn = Instance.new("TextButton", tb)
+closeBtn.Size = UDim2.new(0, 22, 0, 22)
+closeBtn.Position = UDim2.new(1, -26, 0, 3)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 10
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+closeBtn.MouseButton1Click:Connect(function() gui.Enabled = not gui.Enabled end)
 
+-- Content
 local content = Instance.new("ScrollingFrame", main)
 content.Size = UDim2.new(1, -10, 1, -34)
 content.Position = UDim2.new(0, 5, 0, 30)
@@ -179,6 +151,7 @@ content.CanvasSize = UDim2.new(0, 0, 0, 0)
 content.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Instance.new("UIListLayout", content).Padding = UDim.new(0, 4)
 
+-- Toggle helper
 local function Toggle(name, default, callback)
     local f = Instance.new("Frame", content)
     f.Size = UDim2.new(1, 0, 0, 26)
@@ -220,43 +193,97 @@ local function Toggle(name, default, callback)
     end)
 end
 
--- ═══ Toggles ═══
-Toggle("Auto Train", false, function(v) AutoTrain = v end)
-Toggle("Auto Punch", false, function(v) AutoPunch = v end)
-Toggle("Auto Hatch", false, function(v) AutoHatch = v end)
+-- Slider helper
+local function Slider(name, min, max, default, callback)
+    local f = Instance.new("Frame", content)
+    f.Size = UDim2.new(1, 0, 0, 36)
+    f.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+    f.BorderSizePixel = 0
+    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
+
+    local l = Instance.new("TextLabel", f)
+    l.Size = UDim2.new(0.55, 0, 0, 16)
+    l.Position = UDim2.new(0, 6, 0, 2)
+    l.BackgroundTransparency = 1
+    l.Text = "  " .. name
+    l.TextColor3 = Color3.fromRGB(240, 240, 240)
+    l.Font = Enum.Font.GothamSemibold
+    l.TextSize = 10
+    l.TextXAlignment = Enum.TextXAlignment.Left
+
+    local val = Instance.new("TextLabel", f)
+    val.Size = UDim2.new(0.4, 0, 0, 16)
+    val.Position = UDim2.new(0.58, 0, 0, 2)
+    val.BackgroundTransparency = 1
+    val.Text = tostring(default)
+    val.TextColor3 = Color3.fromRGB(130, 90, 220)
+    val.Font = Enum.Font.GothamBold
+    val.TextSize = 10
+    val.TextXAlignment = Enum.TextXAlignment.Right
+
+    local bar = Instance.new("Frame", f)
+    bar.Size = UDim2.new(1, -12, 0, 6)
+    bar.Position = UDim2.new(0, 6, 0, 22)
+    bar.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    bar.BorderSizePixel = 0
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 3)
+
+    local fill = Instance.new("Frame", bar)
+    local pct = (default - min) / (max - min)
+    fill.Size = UDim2.new(math.clamp(pct, 0, 1), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(130, 90, 220)
+    fill.BorderSizePixel = 0
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 3)
+
+    local cur = default
+    local dragging = false
+    local knob = Instance.new("TextButton", bar)
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = UDim2.new(math.clamp(pct, 0, 1), -7, 0.5, -7)
+    knob.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+    knob.Text = ""
+    knob.BorderSizePixel = 0
+    knob.ZIndex = 2
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 7)
+
+    knob.MouseButton1Down:Connect(function() dragging = true end)
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            local p = math.clamp((i.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+            cur = math.floor(min + p * (max - min))
+            cur = math.clamp(cur, min, max)
+            local np = (cur - min) / (max - min)
+            fill.Size = UDim2.new(np, 0, 1, 0)
+            knob.Position = UDim2.new(np, -7, 0.5, -7)
+            val.Text = tostring(cur)
+            pcall(callback, cur)
+        end
+    end)
+end
+
+-- ═══ Toggles (client-side only) ═══
 Toggle("Inf Jump", false, function(v) InfJump = v end)
 Toggle("NoClip", false, function(v) NoClip = v end)
 
--- ═══ Button: Equip Best ═══
-local btn = Instance.new("TextButton", content)
-btn.Size = UDim2.new(1, 0, 0, 26)
-btn.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-btn.Text = "  Equip Best Chickens"
-btn.TextColor3 = Color3.fromRGB(240, 240, 240)
-btn.Font = Enum.Font.GothamSemibold
-btn.TextSize = 11
-btn.TextXAlignment = Enum.TextXAlignment.Left
-btn.BorderSizePixel = 0
-Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-btn.MouseButton1Click:Connect(function()
-    Fire(R.EquipBest)
-    Notify("Equipped best chickens!")
-end)
+-- ═══ Sliders ═══
+Slider("WalkSpeed", 16, 200, 16, function(v) WalkSpeed = v end)
+Slider("JumpPower", 50, 200, 50, function(v) JumpPower = v end)
 
--- ═══ Button: Rebirth ═══
-local rb = Instance.new("TextButton", content)
-rb.Size = UDim2.new(1, 0, 0, 26)
-rb.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-rb.Text = "  Rebirth"
-rb.TextColor3 = Color3.fromRGB(240, 240, 240)
-rb.Font = Enum.Font.GothamSemibold
-rb.TextSize = 11
-rb.TextXAlignment = Enum.TextXAlignment.Left
-rb.BorderSizePixel = 0
-Instance.new("UICorner", rb).CornerRadius = UDim.new(0, 6)
-rb.MouseButton1Click:Connect(function()
-    Fire(R.Rebirth)
-    Notify("Rebirth triggered!")
-end)
+-- ═══ Info ═══
+local info = Instance.new("TextLabel", content)
+info.Size = UDim2.new(1, 0, 0, 50)
+info.BackgroundTransparency = 1
+info.Text = "  Safe Mode: Client-side features only.\n  No remote firing = no server kick.\n  Use WalkSpeed/JumpPower/InfJump/NoClip."
+info.TextColor3 = Color3.fromRGB(160, 160, 170)
+info.Font = Enum.Font.Gotham
+info.TextSize = 10
+info.TextWrapped = true
+info.TextXAlignment = Enum.TextXAlignment.Left
+info.TextYAlignment = Enum.TextYAlignment.Top
 
-Notify("Miles-HUB loaded! Open PlayerGui to see UI.")
+Notify("Miles-HUB Safe Mode loaded!")

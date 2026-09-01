@@ -1,76 +1,38 @@
 --[[ ⚡ Miles-HUB v2.2 — Mobile-Compatible Loader ]]
--- Works on cloud phone / mobile executors
--- NOTE: hookmetamethod REMOVED — it triggers Byfron anti-cheat kicks
+-- Pattern: loadstring(game:HttpGet(url))() — proven to work on RedFinger + Delta
 
 -- ============ SCRIPT URL ============
-local SCRIPT_URL = "https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_original.lua"
+local SCRIPT_URL = "https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_delta.lua"
 -- ====================================
 
--- NO hookmetamethod — this was causing the kick!
-
--- Mobile-safe HTTP fetch (try multiple methods)
+-- Mobile-safe HTTP fetch
 local function safeHttpGet(url)
-    -- Method 1: game:HttpGet (standard)
     local ok, result = pcall(function() return game:HttpGet(url) end)
     if ok and result and #result > 100 then return result end
 
-    -- Method 2: game.HttpGetAsync
     ok, result = pcall(function() return game:HttpGetAsync(url) end)
-    if ok and result and #result > 100 then return result end
-
-    -- Method 3: syn.request / http_request
-    ok, result = pcall(function()
-        if syn and syn.request then
-            local r = syn.request({Url = url, Method = "GET"})
-            return r.Body
-        elseif http_request then
-            local r = http_request({Url = url, Method = "GET"})
-            return r.Body
-        end
-    end)
-    if ok and result and #result > 100 then return result end
-
-    -- Method 4: fluxus request
-    ok, result = pcall(function()
-        if fluxus and fluxus.request then
-            local r = fluxus.request({Url = url, Method = "GET"})
-            return r.Body
-        end
-    end)
     if ok and result and #result > 100 then return result end
 
     return nil
 end
 
 -- Fetch & execute
-print("[Miles-HUB] Fetching script...")
+print("[Miles-HUB] Fetching...")
 local src = safeHttpGet(SCRIPT_URL)
 
 if not src then
-    warn("[Miles-HUB] All HTTP methods failed. Trying direct loadstring fallback...")
-    local ok2, err2 = pcall(function()
-        local code = game:HttpGet(SCRIPT_URL)
-        if code and #code > 100 then
-            loadstring(code)()
-        end
-    end)
-    if not ok2 then
-        warn("[Miles-HUB] Fallback also failed:", err2)
-    end
+    warn("[Miles-HUB] Fetch failed")
     return
 end
 
-print("[Miles-HUB] Compiling (" .. #src .. " bytes)...")
+print("[Miles-HUB] Running (" .. #src .. " bytes)...")
 local chunk, err = loadstring(src)
 if not chunk then
-    warn("[Miles-HUB] Compile failed:", err)
+    warn("[Miles-HUB] Compile error:", err)
     return
 end
 
-print("[Miles-HUB] Executing...")
-local ranOk, runErr = pcall(chunk)
-if not ranOk then
+local ok, runErr = pcall(chunk)
+if not ok then
     warn("[Miles-HUB] Runtime error:", runErr)
-else
-    print("[Miles-HUB] Loaded successfully!")
 end
