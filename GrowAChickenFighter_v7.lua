@@ -252,7 +252,7 @@ end
 -- FLAGS
 local Flags = {
     AutoCollect = false, AutoClaimIncubator = false,
-    AutoHatch = false, SelectedEgg = "Basic Egg", HatchDelay = 0.5,
+    AutoHatch = false, SelectedEgg = "Nest Egg", HatchDelay = 0.5,
     AutoSell = false, AutoFuse = false,
     AutoCoop = false, AutoFeeder = false, AutoRecycler = false,
     AutoTower = false, TargetFloor = 25, FeedBefore = true, AutoRebirth = false,
@@ -308,7 +308,7 @@ task.spawn(function()
     while task.wait(8) do ScanRemotes() end
 end)
 
-local eggOptions = { "colossus", "KrakenEgg", "ascension", "trick", "demonic", "blessed", "basic" }
+local eggOptions = { "Nest Egg", "Thunder Egg", "Scratch Egg" }
 local eventOptions = { "Hot Eggs", "UFO Invasion", "Golden Goose", "Chicken Boss" }
 
 -- --- TAB: EGG ---
