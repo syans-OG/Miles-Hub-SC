@@ -256,7 +256,7 @@ local Flags = {
     AutoHatch = false, SelectedEgg = "nest", HatchDelay = 0.5, HatchCount = 1,
     AutoSell = false, AutoFuse = false,
     AutoCoop = false, AutoFeeder = false, AutoRecycler = false,
-    AutoTower = false, TargetFloor = 25, FeedBefore = true, AutoRebirth = false,
+    AutoTower = false, TargetFloor = 25, FeedBefore = false, AutoRebirth = false,
     AutoEvents = false, Events = {["Hot Eggs"] = true, ["UFO Invasion"] = true, ["Golden Goose"] = true, ["Chicken Boss"] = true},
     FPS = false, AntiAFK = true, Reconnect = false,
     InfJump = false, WalkSpeed = 16, JumpPower = 50,
@@ -591,7 +591,6 @@ task.spawn(function()
                 st = Try("HatchEgg", Flags.SelectedEgg)
             end
             SetStatus("Hatch", st)
-            if Flags.AutoClaimIncubator then Fire("IncubatorInsert", Flags.SelectedEgg) end
             if Flags.AutoSell then
                 task.wait(0.3)
                 SetStatus("Sell", "need chicken ids (see Flock + spy)")

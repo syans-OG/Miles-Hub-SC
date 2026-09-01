@@ -309,6 +309,48 @@ local function FindHatchLogic()
 end
 Btn(scr, "Find Hatch Logic", FindHatchLogic)
 
+local hookedEvents = {}
+local eventsLog = {}
+local function HookDataEvents()
+    local roots = { ReplicatedStorage }
+    local ps = LP:FindFirstChild("PlayerScripts")
+    if ps then roots[#roots + 1] = ps end
+    local kw = { "data", "flock", "replica", "sync", "update", "roster", "own", "index", "invent", "bag", "chicken" }
+    local n = 0
+    for _, root in ipairs(roots) do
+        for _, r in ipairs(root:GetDescendants()) do
+            if r:IsA("RemoteEvent") and not hookedEvents[r] then
+                local nm = r.Name:lower()
+                local hit = false
+                for _, k in ipairs(kw) do
+                    if nm:find(k, 1, true) then hit = true break end
+                end
+                if hit then
+                    hookedEvents[r] = true
+                    n = n + 1
+                    pcall(function()
+                        r.OnClientEvent:Connect(function(...)
+                            local args = { ... }
+                            local outArr = {}
+                            for i, a in ipairs(args) do
+                                outArr[#outArr + 1] = "#" .. i
+                                deepSer(a, 1, outArr, 60, {})
+                            end
+                            eventsLog[#eventsLog + 1] = r.Name .. " <- " .. table.concat(outArr, " ")
+                            if #eventsLog > 60 then table.remove(eventsLog, 1) end
+                        end)
+                    end)
+                end
+            end
+        end
+    end
+    Notify("Hooked " .. tostring(n) .. " data events (do a sync action now)")
+end
+Btn(scr, "Hook Data Events", HookDataEvents)
+Btn(scr, "Show Data Events", function()
+    Show(#eventsLog == 0 and { "(none yet)" } or eventsLog)
+end)
+
 local function scanOneLevel(root, max)
     local dataLines = {}
     local n = 0
