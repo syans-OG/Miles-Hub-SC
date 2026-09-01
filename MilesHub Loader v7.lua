@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_v7.lua"))()
