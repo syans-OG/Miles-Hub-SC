@@ -452,14 +452,15 @@ end
 local dataLines = {}
 local function ScanData()
     dataLines = {}
-    local cap = 900
+    local cap = 2000
     local tree = nil
     tree = function(obj, depth)
         if #dataLines >= cap then return end
         for _, c in ipairs(obj:GetChildren()) do
             if #dataLines >= cap then return end
-            if c.Name:find("Pose") or c.Name:find("Armature") or c.Name:find("Initial") then
-                -- skip animation noise
+            if c.Name:find("Pose") or c.Name:find("Armature") or c.Name:find("Initial")
+            or c.Name == "PlayerModule" or c.Name == "Components" then
+                -- skip animation noise + stock Roblox modules
             else
                 local val = ""
                 if c:IsA("ValueBase") then val = " = " .. ser(c.Value, 2) end
@@ -476,6 +477,31 @@ local function ScanData()
     table.insert(dataLines, "== ReplicatedStorage ==")
     tree(ReplicatedStorage, 0)
     dataLbl.Text = table.concat(dataLines, "\n")
+    -- Query server config (egg names, rebirth req, prices...)
+    pcall(function()
+        local keysRemote = Remotes["ConfigGetFlagKeys"]
+        if not keysRemote or keysRemote:IsA("RemoteEvent") then return end
+        local ok, keys = pcall(function() return keysRemote:InvokeServer() end)
+        if not ok or type(keys) ~= "table" then
+            table.insert(dataLines, "cfg: ConfigGetFlagKeys = (n/a)")
+            dataLbl.Text = table.concat(dataLines, "\n")
+            return
+        end
+        table.insert(dataLines, "cfg: " .. tostring(#keys) .. " keys available")
+        dataLbl.Text = table.concat(dataLines, "\n")
+        local n = 0
+        for _, k in ipairs(keys) do
+            if n >= 100 then break end
+            n = n + 1
+            task.spawn(function()
+                local rd = Remotes["ConfigGetParam"]
+                if not rd or rd:IsA("RemoteEvent") then return end
+                local s = pcall(function() return rd:InvokeServer(k) end)
+                table.insert(dataLines, "cfg." .. tostring(k) .. " = " .. (select(1, s) and ser(select(2, s), 4) or "(error)"))
+                dataLbl.Text = table.concat(dataLines, "\n")
+            end)
+        end
+    end)
 end
 Btn(debugTab, "Scan Player Data", ScanData)
 Btn(debugTab, "Copy Player Data", function()
