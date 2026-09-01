@@ -14,12 +14,13 @@ local function Notify(t)
     end)
 end
 
--- GUI
+-- GUI (CoreGui: survives game clearing PlayerGui on UI switches)
+local CoreGui = game:GetService("CoreGui")
 local gui = Instance.new("ScreenGui")
 gui.Name = "MilesHub"
 gui.ResetOnSpawn = false
 gui.DisplayOrder = 999999
-gui.Parent = LP:WaitForChild("PlayerGui")
+gui.Parent = CoreGui
 
 local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
 local gw = isMobile and 280 or 400
@@ -254,7 +255,7 @@ local Flags = {
     AutoHatch = false, SelectedEgg = "Basic Egg", HatchDelay = 0.5,
     AutoSell = false, AutoFuse = false,
     AutoCoop = false, AutoFeeder = false, AutoRecycler = false,
-    AutoTower = false, TargetFloor = 20, FeedBefore = true, AutoRebirth = false,
+    AutoTower = false, TargetFloor = 25, FeedBefore = true, AutoRebirth = false,
     AutoEvents = false, Events = {["Hot Eggs"] = true, ["UFO Invasion"] = true, ["Golden Goose"] = true, ["Chicken Boss"] = true},
     FPS = false, AntiAFK = true, Reconnect = false,
     InfJump = false, WalkSpeed = 16, JumpPower = 50,
@@ -562,18 +563,7 @@ local function ScanData()
                     end
                 end
                 dataLbl.Text = table.concat(dataLines, "\n")
-                local n = tonumber(string.match(r2 or "", "(%d+)"))
-                if n and n > 0 then
-                    Flags.TargetFloor = n
-                    Notify("Target floor auto-set to " .. tostring(n))
-                end
             end)
-        end
-    else
-        local n = tonumber(string.match(req, "(%d+)"))
-        if n and n > 0 then
-            Flags.TargetFloor = n
-            Notify("Target floor auto-set to " .. tostring(n))
         end
     end
 end
@@ -648,7 +638,7 @@ pcall(function()
     fg.Name = "Float"
     fg.ResetOnSpawn = false
     fg.DisplayOrder = 999999
-    fg.Parent = LP:WaitForChild("PlayerGui")
+    fg.Parent = CoreGui
     local fb = Instance.new("TextButton", fg)
     fb.Size = UDim2.new(0, 50, 0, 50)
     fb.Position = UDim2.new(0, 10, 0.3, 0)
@@ -664,6 +654,17 @@ pcall(function()
     Instance.new("UICorner", fb).CornerRadius = UDim.new(0.5, 0)
     Instance.new("UIStroke", fb).Color = Color3.fromRGB(168, 85, 247)
     fb.MouseButton1Click:Connect(function() gui.Enabled = not gui.Enabled end)
+end)
+
+-- GUI watchdog (game may clear/disable PlayerGui children on UI switches)
+task.spawn(function()
+    while task.wait(4) do
+        pcall(function()
+            if gui and gui.Parent ~= CoreGui then gui.Parent = CoreGui end
+            local fg = CoreGui:FindFirstChild("Float")
+            if fg and fg.Parent ~= CoreGui then fg.Parent = CoreGui end
+        end)
+    end
 end)
 
 -- --- FEATURES ---
