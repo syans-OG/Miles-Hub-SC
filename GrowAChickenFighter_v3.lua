@@ -1,31 +1,21 @@
 --[[
-    ⚡ Miles-HUB v2.2 — V3 (Proven Safe Patterns)
+    ⚡ Miles-HUB v2.2 — V3.1 (BAC-8705 Fix)
     
-    Based on V2 which tested safe (no kick).
-    All features use only proven-safe patterns.
+    BAC-8705 = WalkSpeed/JumpPower modification detected!
+    Byfron threshold: ~25-30 for WalkSpeed, ~60-70 for JumpPower
     
-    Safe patterns (from V2 test):
-    - StarterGui:SetCore("SendNotification")
-    - ScreenGui in PlayerGui
-    - UserInputService.JumpRequest:Connect
-    - TextButton.MouseButton1Click:Connect
-    
-    Avoided patterns (caused kick):
-    - ReplicatedStorage:GetChildren() scanning
-    - RunService.Stepped/Heartbeat:Connect loops
-    - LP.CharacterAdded:Connect
+    This version limits speed/jump to SAFE values below threshold.
+    NO RunService loops, NO remote firing, NO ReplicatedStorage scan.
 ]]
 
 task.wait(1)
 
--- ═══ Services (minimal) ═══
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 
 local LP = Players.LocalPlayer
 
--- ═══ Notification (proven safe) ═══
 local function Notify(text)
     pcall(function()
         StarterGui:SetCore("SendNotification", {
@@ -36,12 +26,8 @@ local function Notify(text)
     end)
 end
 
--- ═══ Flags ═══
+-- ═══ InfJump (proven safe) ═══
 local InfJump = false
-local WalkSpeed = 16
-local JumpPower = 50
-
--- ═══ InfJump (proven safe pattern) ═══
 UserInputService.JumpRequest:Connect(function()
     if InfJump then
         local c = LP.Character
@@ -52,29 +38,36 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
--- ═══ WalkSpeed/JumpPower (safe: direct set, no loop) ═══
-UserInputService.JumpRequest:Connect(function()
-    if InfJump then
-        local c = LP.Character
-        if c then
-            local h = c:FindFirstChildOfClass("Humanoid")
-            if h then
-                h:ChangeState(Enum.HumanoidStateType.Jumping)
-                -- Apply speed/jump when character exists
-                if WalkSpeed > 16 then h.WalkSpeed = WalkSpeed end
-                if JumpPower > 50 then h.JumpPower = JumpPower end
-            end
+-- ═══ Safe Speed/Jump (below Byfron threshold) ═══
+-- Byfron detects: WalkSpeed > ~25, JumpPower > ~60
+-- Stay BELOW these values to avoid BAC-8705
+
+local function SetSpeed(val)
+    local c = LP.Character
+    if c then
+        local h = c:FindFirstChildOfClass("Humanoid")
+        if h then
+            h.WalkSpeed = val
+            Notify("Speed: " .. val)
         end
     end
-end)
+end
 
--- ═══ Apply speed when character changes (safe: MouseButton1Click pattern) ═══
--- We apply stats when user interacts, not in a loop
+local function SetJump(val)
+    local c = LP.Character
+    if c then
+        local h = c:FindFirstChildOfClass("Humanoid")
+        if h then
+            h.JumpPower = val
+            Notify("Jump: " .. val)
+        end
+    end
+end
 
--- ═══ GUI (proven safe pattern) ═══
+-- ═══ GUI ═══
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-local guiW = isMobile and 260 or 340
-local guiH = isMobile and 250 or 320
+local guiW = isMobile and 260 or 320
+local guiH = isMobile and 280 or 360
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "MilesHub"
@@ -90,7 +83,6 @@ main.Active = true
 main.Draggable = true
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 8)
 
--- Title
 local tb = Instance.new("Frame", main)
 tb.Size = UDim2.new(1, 0, 0, 26)
 tb.BackgroundColor3 = Color3.fromRGB(130, 90, 220)
@@ -101,7 +93,7 @@ local tt = Instance.new("TextLabel", tb)
 tt.Size = UDim2.new(1, -8, 1, 0)
 tt.Position = UDim2.new(0, 8, 0, 0)
 tt.BackgroundTransparency = 1
-tt.Text = "Miles-HUB v2.2"
+tt.Text = "Miles-HUB v2.2 (Safe Speed)"
 tt.TextColor3 = Color3.fromRGB(240, 240, 240)
 tt.Font = Enum.Font.GothamBold
 tt.TextSize = 11
@@ -118,7 +110,6 @@ closeBtn.TextSize = 9
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 5)
 closeBtn.MouseButton1Click:Connect(function() gui.Enabled = not gui.Enabled end)
 
--- Content
 local content = Instance.new("ScrollingFrame", main)
 content.Size = UDim2.new(1, -10, 1, -32)
 content.Position = UDim2.new(0, 5, 0, 28)
@@ -129,7 +120,7 @@ content.CanvasSize = UDim2.new(0, 0, 0, 0)
 content.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Instance.new("UIListLayout", content).Padding = UDim.new(0, 3)
 
--- ═══ Toggle (proven safe pattern) ═══
+-- ═══ Helpers ═══
 local function Toggle(name, default, callback)
     local f = Instance.new("Frame", content)
     f.Size = UDim2.new(1, 0, 0, 24)
@@ -171,7 +162,6 @@ local function Toggle(name, default, callback)
     end)
 end
 
--- ═══ Button (proven safe pattern) ═══
 local function Button(name, callback)
     local b = Instance.new("TextButton", content)
     b.Size = UDim2.new(1, 0, 0, 24)
@@ -183,86 +173,58 @@ local function Button(name, callback)
     b.TextXAlignment = Enum.TextXAlignment.Left
     b.BorderSizePixel = 0
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-    b.MouseButton1Click:Connect(function()
-        pcall(callback)
-    end)
-    return b
+    b.MouseButton1Click:Connect(function() pcall(callback) end)
 end
 
--- ═══ Toggles ═══
+-- ═══ Section: Jump ═══
+local sec1 = Instance.new("TextLabel", content)
+sec1.Size = UDim2.new(1, 0, 0, 16)
+sec1.BackgroundTransparency = 1
+sec1.Text = "  JUMP"
+sec1.TextColor3 = Color3.fromRGB(130, 90, 220)
+sec1.Font = Enum.Font.GothamBold
+sec1.TextSize = 9
+sec1.TextXAlignment = Enum.TextXAlignment.Left
+
 Toggle("Inf Jump", false, function(v) InfJump = v end)
 
--- ═══ Speed/Jump Buttons (apply on click, not loop) ═══
-Button("Set Speed: 50", function()
-    WalkSpeed = 50
-    local c = LP.Character
-    if c then
-        local h = c:FindFirstChildOfClass("Humanoid")
-        if h then h.WalkSpeed = 50 end
-    end
-    Notify("Speed set to 50!")
-end)
+-- ═══ Section: Speed (SAFE VALUES ONLY) ═══
+local sec2 = Instance.new("TextLabel", content)
+sec2.Size = UDim2.new(1, 0, 0, 16)
+sec2.BackgroundTransparency = 1
+sec2.Text = "  SPEED (Safe: max 24)"
+sec2.TextColor3 = Color3.fromRGB(130, 90, 220)
+sec2.Font = Enum.Font.GothamBold
+sec2.TextSize = 9
+sec2.TextXAlignment = Enum.TextXAlignment.Left
 
-Button("Set Speed: 100", function()
-    WalkSpeed = 100
-    local c = LP.Character
-    if c then
-        local h = c:FindFirstChildOfClass("Humanoid")
-        if h then h.WalkSpeed = 100 end
-    end
-    Notify("Speed set to 100!")
-end)
+Button("Speed: 20", function() SetSpeed(20) end)
+Button("Speed: 24 (Max Safe)", function() SetSpeed(24) end)
+Button("Speed: 16 (Normal)", function() SetSpeed(16) end)
 
-Button("Set Speed: 16 (Normal)", function()
-    WalkSpeed = 16
-    local c = LP.Character
-    if c then
-        local h = c:FindFirstChildOfClass("Humanoid")
-        if h then h.WalkSpeed = 16 end
-    end
-    Notify("Speed reset to normal!")
-end)
+-- ═══ Section: Jump Power (SAFE VALUES ONLY) ═══
+local sec3 = Instance.new("TextLabel", content)
+sec3.Size = UDim2.new(1, 0, 0, 16)
+sec3.BackgroundTransparency = 1
+sec3.Text = "  JUMP POWER (Safe: max 55)"
+sec3.TextColor3 = Color3.fromRGB(130, 90, 220)
+sec3.Font = Enum.Font.GothamBold
+sec3.TextSize = 9
+sec3.TextXAlignment = Enum.TextXAlignment.Left
 
-Button("Set Jump: 100", function()
-    JumpPower = 100
-    local c = LP.Character
-    if c then
-        local h = c:FindFirstChildOfClass("Humanoid")
-        if h then h.JumpPower = 100 end
-    end
-    Notify("Jump power set to 100!")
-end)
+Button("Jump: 55 (Max Safe)", function() SetJump(55) end)
+Button("Jump: 50 (Normal)", function() SetJump(50) end)
 
-Button("Set Jump: 200", function()
-    JumpSpeed = 200
-    local c = LP.Character
-    if c then
-        local h = c:FindFirstChildOfClass("Humanoid")
-        if h then h.JumpPower = 200 end
-    end
-    Notify("Jump power set to 200!")
-end)
+-- ═══ Warning ═══
+local warn1 = Instance.new("TextLabel", content)
+warn1.Size = UDim2.new(1, 0, 0, 30)
+warn1.BackgroundTransparency = 1
+warn1.Text = "  ⚠️ Speed >24 or Jump >55 = BAC-8705 kick\n  Stay within safe limits!"
+warn1.TextColor3 = Color3.fromRGB(255, 200, 100)
+warn1.Font = Enum.Font.Gotham
+warn1.TextSize = 9
+warn1.TextWrapped = true
+warn1.TextXAlignment = Enum.TextXAlignment.Left
+warn1.TextYAlignment = Enum.TextYAlignment.Top
 
-Button("Reset Jump: 50 (Normal)", function()
-    JumpPower = 50
-    local c = LP.Character
-    if c then
-        local h = c:FindFirstChildOfClass("Humanoid")
-        if h then h.JumpPower = 50 end
-    end
-    Notify("Jump power reset to normal!")
-end)
-
--- ═══ Info ═══
-local info = Instance.new("TextLabel", content)
-info.Size = UDim2.new(1, 0, 0, 30)
-info.BackgroundTransparency = 1
-info.Text = "  Click buttons to apply speed/jump.\n  No auto-loops = no kick."
-info.TextColor3 = Color3.fromRGB(120, 120, 130)
-info.Font = Enum.Font.Gotham
-info.TextSize = 9
-info.TextWrapped = true
-info.TextXAlignment = Enum.TextXAlignment.Left
-info.TextYAlignment = Enum.TextYAlignment.Top
-
-Notify("Miles-HUB v2.2 loaded!")
+Notify("Miles-HUB loaded! Stay under speed limits!")
