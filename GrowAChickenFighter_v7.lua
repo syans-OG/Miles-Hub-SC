@@ -290,12 +290,13 @@ ScanRemotes()
 
 -- Fire capture bypass (set true so external namecall hooks skip our own calls)
 SelfFire = false
+local fireMin, fireMax = 100, 400
 
 local function Fire(name, ...)
     local r = Remotes[name]
     if not r then return false end
     local args = { ... }
-    task.wait(math.random(100, 400) / 1000)
+    task.wait(math.random(fireMin, fireMax) / 1000)
     SelfFire = true
     local ok = pcall(function()
         if r:IsA("RemoteEvent") then r:FireServer(unpack(args)) else r:InvokeServer(unpack(args)) end
@@ -310,8 +311,12 @@ local function Try(name, ...)
 end
 
 -- Auto re-scan: remotes may replicate after load
+local listenTower = function() end
 task.spawn(function()
-    while task.wait(8) do ScanRemotes() end
+    while task.wait(8) do
+        ScanRemotes()
+        listenTower()
+    end
 end)
 
 local eggOptions = { "nest", "thunder", "scratch", "charm" }
@@ -681,12 +686,13 @@ task.spawn(function()
             SetStatus("Coop", "fired")
         else SetStatus("Coop", "off") end
         if Flags.AutoFeeder then
-            for slot = 1, 4 do
+            fireMin, fireMax = 40, 120
+            for slot = 1, 6 do
                 Fire("BuyGenerator", slot)
-                task.wait(0.2)
                 Fire("UpgradeGenerator", slot)
             end
-            SetStatus("Feeder", "gen 1-4")
+            fireMin, fireMax = 100, 400
+            SetStatus("Feeder", "gen 1-6")
         else SetStatus("Feeder", "off") end
         if Flags.AutoRecycler then
             Fire("UpgradeRecycler")
@@ -698,32 +704,37 @@ end)
 
 -- Auto Tower Grind + Feed Before (event-driven: retreat/defeat handling)
 local towerState = { grinding = false, ready = true, floored = 0 }
-local function listenTower()
-    local function on(ev, fn)
-        local r = Remotes[ev]
-        if r and r:IsA("RemoteEvent") then
-            pcall(function() r.OnClientEvent:Connect(fn) end)
-        end
-    end
-    on("TowerFloorCleared", function() towerState.floored = towerState.floored + 1 end)
-    on("TowerRunStarted", function() towerState.floored = 0 end)
-    on("TowerDefeat", function()
+local towerHandlers = {
+    TowerFloorCleared = function() towerState.floored = towerState.floored + 1 end,
+    TowerRunStarted = function() towerState.floored = 0 end,
+    TowerDefeat = function()
         towerState.grinding = false
         towerState.ready = false
         SetStatus("Tower", "defeat, waiting...")
         RefreshStatus()
         task.delay(math.random(6, 15), function() towerState.ready = true end)
-    end)
-    on("TowerContinueOffer", function()
+    end,
+    TowerContinueOffer = function()
         Fire("TowerContinueDecline")
         towerState.grinding = false
         towerState.ready = false
         SetStatus("Tower", "declined continue, waiting...")
         RefreshStatus()
         task.delay(math.random(5, 10), function() towerState.ready = true end)
-    end)
+    end,
+}
+local towerHooked = {}
+listenTower = function()
+    for ev, fn in pairs(towerHandlers) do
+        local r = Remotes[ev]
+        if r and r:IsA("RemoteEvent") and not towerHooked[ev] then
+            towerHooked[ev] = true
+            pcall(function() r.OnClientEvent:Connect(function(...) pcall(fn, ...) end) end)
+        end
+    end
 end
 listenTower()
+local rebirthing = false
 task.spawn(function()
     while task.wait(2) do
         if Flags.AutoTower and towerState.ready then
@@ -735,14 +746,31 @@ task.spawn(function()
                 Fire("TowerStart")
                 towerState.grinding = true
             end
-            Fire("TowerElevator")
             if towerState.floored >= Flags.TargetFloor then
                 Fire("TowerSurrender")
-                if Flags.AutoRebirth then Fire("Rebirth") end
                 towerState.grinding = false
                 towerState.ready = false
                 SetStatus("Tower", "floor " .. towerState.floored .. "/" .. Flags.TargetFloor .. " reached, retreating")
-                task.delay(math.random(3, 8), function() towerState.ready = true end)
+                task.delay(math.random(2, 4), function()
+                    if Flags.AutoRebirth and not rebirthing then
+                        rebirthing = true
+                        SetStatus("Tower", "rebirthing...")
+                        RefreshStatus()
+                        task.wait(math.random(1, 2))
+                        pcall(function()
+                            local r = Remotes["Rebirth"]
+                            if r and r:IsA("RemoteFunction") then
+                                local ok, res = r:InvokeServer()
+                                if not ok then res = "error" end
+                                SetStatus("Tower", "rebirth: " .. tostring(res))
+                            else
+                                SetStatus("Tower", "rebirth: no remote")
+                            end
+                        end)
+                        rebirthing = false
+                    end
+                    towerState.ready = true
+                end)
             else
                 SetStatus("Tower", "floor " .. towerState.floored .. "/" .. Flags.TargetFloor)
             end
@@ -753,18 +781,41 @@ task.spawn(function()
     end
 end)
 
--- Auto join events: ordering chickens to chaos mode = join fighting events
+-- Auto join events: only chaos-join while a live event is running, back to coop after
+local eventActive = false
+local eventRemoteHooked = {}
+local function hookEventRemotes()
+    local r1 = Remotes["LiveEventStarted"]
+    if r1 and r1:IsA("RemoteEvent") and not eventRemoteHooked.LiveEventStarted then
+        eventRemoteHooked.LiveEventStarted = true
+        pcall(function() r1.OnClientEvent:Connect(function() eventActive = true end) end)
+    end
+    local r2 = Remotes["LiveEventEnded"]
+    if r2 and r2:IsA("RemoteEvent") and not eventRemoteHooked.LiveEventEnded then
+        eventRemoteHooked.LiveEventEnded = true
+        pcall(function() r2.OnClientEvent:Connect(function() eventActive = false end) end)
+    end
+end
+hookEventRemotes()
+task.spawn(function()
+    while task.wait(5) do hookEventRemotes() end
+end)
+local lastOrder = "coop"
 task.spawn(function()
     while task.wait(7) do
         if Flags.AutoEvents then
-            for _, en in ipairs(eventOptions) do
-                if Flags.Events[en] then
-                    Fire("SetChickenOrder", "chaos")
-                    break
-                end
+            local want = eventActive and "chaos" or "coop"
+            if want ~= lastOrder then
+                Fire("SetChickenOrder", want)
+                lastOrder = want
             end
-            SetStatus("Events", "chaos (fighting)")
+            SetStatus("Events", eventActive and "chaos (event live)" or "coop (no event)")
             RefreshStatus()
+        else
+            if lastOrder ~= "coop" then
+                Fire("SetChickenOrder", "coop")
+                lastOrder = "coop"
+            end
         end
     end
 end)
