@@ -27,6 +27,20 @@ main.BorderSizePixel = 0
 main.Active = true
 main.Draggable = true
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 8)
+main.Visible = false
+
+local chip = Instance.new("TextButton", gui)
+chip.Size = UDim2.new(0, 96, 0, 28)
+chip.Position = UDim2.new(1, -106, 0, 10)
+chip.BackgroundColor3 = Color3.fromRGB(60, 120, 220)
+chip.BorderSizePixel = 0
+chip.ZIndex = 5
+chip.Text = "SC DataMiner"
+chip.TextColor3 = Color3.fromRGB(240, 240, 240)
+chip.Font = Enum.Font.GothamBold
+chip.TextSize = 12
+Instance.new("UICorner", chip).CornerRadius = UDim.new(0, 8)
+chip.Visible = true
 
 local tb = Instance.new("Frame", main)
 tb.Size = UDim2.new(1, 0, 0, 28)
@@ -50,7 +64,14 @@ closeBtn.Text = "X"
 closeBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 11
-closeBtn.MouseButton1Click:Connect(function() gui.Enabled = not gui.Enabled end)
+closeBtn.MouseButton1Click:Connect(function()
+    main.Visible = false
+    chip.Visible = true
+end)
+chip.MouseButton1Click:Connect(function()
+    main.Visible = true
+    chip.Visible = false
+end)
 
 local scr = Instance.new("ScrollingFrame", main)
 scr.Size = UDim2.new(1, 0, 1, -34)
@@ -108,7 +129,10 @@ end
 pcall(function()
     UIS.InputBegan:Connect(function(input, gpe)
         if gpe then return end
-        if input.KeyCode == Enum.KeyCode.LeftShift then gui.Enabled = not gui.Enabled end
+        if input.KeyCode == Enum.KeyCode.LeftShift then
+            main.Visible = not main.Visible
+            chip.Visible = not main.Visible
+        end
     end)
 end)
 
@@ -154,12 +178,17 @@ pcall(function()
         local method = getnamecallmethod()
         if captureOn and not SelfFire and (method == "FireServer" or method == "InvokeServer") then
             local args = { ... }
-            local line = tostring(self) .. "("
-            for i, a in ipairs(args) do
-                line = line .. (i > 1 and ", " or "") .. (typeof(a) == "Instance" and a.ClassName or ser(a, 4))
-            end
-            captured[#captured + 1] = line .. ")"
-            if #captured > 80 then table.remove(captured, 1) end
+            pcall(function()
+                local line = tostring(self) .. "("
+                local n = math.min(#args, 6)
+                for i = 1, n do
+                    local a = args[i]
+                    line = line .. (i > 1 and ", " or "") .. (typeof(a) == "Instance" and a.ClassName or ser(a, 2))
+                end
+                if #args > n then line = line .. ", ..." end
+                captured[#captured + 1] = line .. ")"
+                if #captured > 80 then table.remove(captured, 1) end
+            end)
         end
         return oldNamecall(self, ...)
     end)
