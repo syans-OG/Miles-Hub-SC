@@ -253,7 +253,7 @@ end
 -- FLAGS
 local Flags = {
     AutoCollect = false, AutoClaimIncubator = false,
-    AutoHatch = false, SelectedEgg = "Nest Egg", HatchDelay = 0.5,
+    AutoHatch = false, SelectedEgg = "nest", HatchDelay = 0.5, HatchCount = 1,
     AutoSell = false, AutoFuse = false,
     AutoCoop = false, AutoFeeder = false, AutoRecycler = false,
     AutoTower = false, TargetFloor = 25, FeedBefore = true, AutoRebirth = false,
@@ -314,7 +314,7 @@ task.spawn(function()
     while task.wait(8) do ScanRemotes() end
 end)
 
-local eggOptions = { "Nest Egg", "Thunder Egg", "Scratch Egg" }
+local eggOptions = { "nest", "thunder", "scratch", "charm" }
 local eventOptions = { "Hot Eggs", "UFO Invasion", "Golden Goose", "Chicken Boss" }
 
 -- --- TAB: EGG ---
@@ -325,8 +325,9 @@ Toggle(egg, "Auto Claim Incubator", false, function(v) Flags.AutoClaimIncubator 
 Section(egg, "AUTO HATCH")
 Toggle(egg, "Auto Hatch", false, function(v) Flags.AutoHatch = v end)
 Slider(egg, "Hatch Delay", 0.1, 2, 0.5, "s", function(v) Flags.HatchDelay = v end)
+Slider(egg, "Hatch Count", 1, 10, 1, "", function(v) Flags.HatchCount = v end)
 for _, en in ipairs(eggOptions) do
-    Btn(egg, "Egg: " .. en, function() Flags.SelectedEgg = en; Notify(en) end)
+    Btn(egg, "Egg id: " .. en, function() Flags.SelectedEgg = en; Notify(en) end)
 end
 local inRow = Instance.new("Frame", egg)
 inRow.Size = UDim2.new(1, 0, 0, 30)
@@ -335,7 +336,7 @@ Instance.new("UICorner", inRow).CornerRadius = UDim.new(0, 6)
 local bx = Instance.new("TextBox", inRow)
 bx.Size = UDim2.new(0.7, -4, 0, 24)
 bx.Position = UDim2.new(0, 4, 0, 3)
-bx.PlaceholderText = "custom egg name"
+bx.PlaceholderText = "egg id (e.g. nest)"
 bx.ClearTextOnFocus = true
 bx.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
 bx.BorderSizePixel = 0
@@ -583,9 +584,18 @@ end)
 task.spawn(function()
     while task.wait(Flags.HatchDelay) do
         if Flags.AutoHatch then
-            SetStatus("Hatch", Try("HatchEgg", Flags.SelectedEgg, 1))
+            local st = "no remote"
+            if Remotes["HatchEggs"] then
+                st = Try("HatchEggs", Flags.SelectedEgg, Flags.HatchCount)
+            else
+                st = Try("HatchEgg", Flags.SelectedEgg)
+            end
+            SetStatus("Hatch", st)
             if Flags.AutoClaimIncubator then Fire("IncubatorInsert", Flags.SelectedEgg) end
-            if Flags.AutoSell then task.wait(0.3) SetStatus("Sell", Try("SellChickens", "All")) end
+            if Flags.AutoSell then
+                task.wait(0.3)
+                SetStatus("Sell", "need chicken ids (see Flock + spy)")
+            end
             RefreshStatus()
         end
     end
