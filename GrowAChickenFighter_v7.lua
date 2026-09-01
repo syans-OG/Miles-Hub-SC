@@ -297,6 +297,16 @@ local function Fire(name, ...)
     return true
 end
 
+local function Try(name, ...)
+    if Fire(name, ...) then return "fired" end
+    return "no remote (" .. name .. ")"
+end
+
+-- Auto re-scan: remotes may replicate after load
+task.spawn(function()
+    while task.wait(8) do ScanRemotes() end
+end)
+
 local eggOptions = { "Basic Egg", "Forest Egg", "Desert Egg", "Magma Egg", "Cyber Egg", "Void Egg" }
 local eventOptions = { "Hot Eggs", "UFO Invasion", "Golden Goose", "Chicken Boss" }
 
@@ -518,7 +528,7 @@ end)
 task.spawn(function()
     while task.wait(1.5) do
         if Flags.AutoCollect then SetStatus("Collect", "auto (server-side)") end
-        if Flags.AutoClaimIncubator then SetStatus("Incubator", Fire("IncubatorClaim") and "fired" or "no remote") end
+        if Flags.AutoClaimIncubator then SetStatus("Incubator", Try("IncubatorClaim")) end
         if Flags.AutoCollect or Flags.AutoClaimIncubator then RefreshStatus() end
     end
 end)
@@ -527,9 +537,9 @@ end)
 task.spawn(function()
     while task.wait(Flags.HatchDelay) do
         if Flags.AutoHatch then
-            SetStatus("Hatch", Fire("HatchEgg", Flags.SelectedEgg, 1) and "fired" or "no remote")
+            SetStatus("Hatch", Try("HatchEgg", Flags.SelectedEgg, 1))
             if Flags.AutoClaimIncubator then Fire("IncubatorInsert", Flags.SelectedEgg) end
-            if Flags.AutoSell then task.wait(0.3) SetStatus("Sell", Fire("SellChickens", "All") and "fired" or "no remote") end
+            if Flags.AutoSell then task.wait(0.3) SetStatus("Sell", Try("SellChickens", "All")) end
             RefreshStatus()
         end
     end
@@ -539,7 +549,7 @@ end)
 task.spawn(function()
     while task.wait(3) do
         if Flags.AutoFuse then
-            SetStatus("Fuse", Fire("FuseChickens", "Duplicates") and "fired" or "no remote")
+            SetStatus("Fuse", Try("FuseChickens", "Duplicates"))
             RefreshStatus()
         end
     end
@@ -563,7 +573,7 @@ task.spawn(function()
     end
 end)
 
--- Auto Tower Grind + Feed Before + Auto Rebirth (native SetAutoRebirth)
+-- Auto Tower Grind + Feed Before
 task.spawn(function()
     while task.wait(1.5) do
         if Flags.AutoTower then
