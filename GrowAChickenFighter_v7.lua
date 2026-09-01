@@ -254,7 +254,7 @@ end
 local Flags = {
     AutoCollect = false, AutoClaimIncubator = false,
     AutoHatch = false, SelectedEgg = "nest", HatchDelay = 0.5, HatchCount = 1,
-    AutoSell = false, AutoFuse = false,
+    AutoSell = false, AutoFuse = false, ChickenIds = {},
     AutoCoop = false, AutoFeeder = false, AutoRecycler = false,
     AutoTower = false, TargetFloor = 25, FeedBefore = false, AutoRebirth = false,
     AutoEvents = false, Events = {["Hot Eggs"] = true, ["UFO Invasion"] = true, ["Golden Goose"] = true, ["Chicken Boss"] = true},
@@ -360,6 +360,40 @@ end)
 Section(egg, "SELL AND FUSE")
 Toggle(egg, "Auto Sell After Hatch", false, function(v) Flags.AutoSell = v end)
 Toggle(egg, "Auto Fuse Duplicate", false, function(v) Flags.AutoFuse = v end)
+local idsRow = Instance.new("Frame", egg)
+idsRow.Size = UDim2.new(1, 0, 0, 30)
+idsRow.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+Instance.new("UICorner", idsRow).CornerRadius = UDim.new(0, 6)
+local idsBx = Instance.new("TextBox", idsRow)
+idsBx.Size = UDim2.new(0.7, -4, 0, 24)
+idsBx.Position = UDim2.new(0, 4, 0, 3)
+idsBx.PlaceholderText = "chicken ids (c4226,c4215)"
+idsBx.ClearTextOnFocus = true
+idsBx.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+idsBx.BorderSizePixel = 0
+idsBx.Font = Enum.Font.Gotham
+idsBx.TextSize = 10
+idsBx.TextColor3 = Color3.fromRGB(240, 240, 240)
+Instance.new("UICorner", idsBx).CornerRadius = UDim.new(0, 6)
+local idsSt = Instance.new("TextButton", idsRow)
+idsSt.Size = UDim2.new(0.26, -4, 0, 24)
+idsSt.Position = UDim2.new(0.72, 0, 0, 3)
+idsSt.BackgroundColor3 = Color3.fromRGB(130, 90, 220)
+idsSt.Text = "Set"
+idsSt.TextColor3 = Color3.fromRGB(240, 240, 240)
+idsSt.Font = Enum.Font.GothamBold
+idsSt.TextSize = 10
+Instance.new("UICorner", idsSt).CornerRadius = UDim.new(0, 6)
+idsSt.MouseButton1Click:Connect(function()
+    local t = idsBx.Text:gsub("%s+", "")
+    Flags.ChickenIds = {}
+    if t ~= "" then
+        for part in (t .. ","):gmatch("(.-),") do
+            if part ~= "" then Flags.ChickenIds[#Flags.ChickenIds + 1] = part end
+        end
+    end
+    Notify("Chicken ids: " .. #Flags.ChickenIds)
+end)
 
 -- --- TAB: FARM ---
 local farm = CreateTab("Farm")
@@ -590,18 +624,27 @@ task.spawn(function()
             SetStatus("Hatch", st)
             if Flags.AutoSell then
                 task.wait(0.3)
-                SetStatus("Sell", "need chicken ids (see Flock + spy)")
+                if #Flags.ChickenIds > 0 then
+                    SetStatus("Sell", Try("SellChickens", Flags.ChickenIds))
+                else
+                    SetStatus("Sell", "no ids (set in Egg tab)")
+                end
             end
             RefreshStatus()
         end
     end
 end)
 
--- Auto Fuse
+-- Auto Fuse: pair consecutive chicken ids -> FuseChickens(id1, id2, {}, "a")
 task.spawn(function()
     while task.wait(3) do
         if Flags.AutoFuse then
-            SetStatus("Fuse", Try("FuseChickens", "Duplicates"))
+            if #Flags.ChickenIds >= 2 then
+                local a, b = Flags.ChickenIds[1], Flags.ChickenIds[2]
+                SetStatus("Fuse", Try("FuseChickens", a, b, {}, "a"))
+            else
+                SetStatus("Fuse", "need >= 2 ids")
+            end
             RefreshStatus()
         end
     end
