@@ -451,34 +451,31 @@ end
 
 local dataLines = {}
 local function ScanData()
-    dataLines = {"Player = " .. LP.Name}
-    local ls = LP:FindFirstChild("Leaderstats")
-    if ls then
-        for _, stat in ipairs(ls:GetChildren()) do
-            if stat:IsA("ValueBase") then table.insert(dataLines, "LS." .. stat.Name .. " = " .. ser(stat.Value)) end
-        end
-    else
-        table.insert(dataLines, "LS = (none)")
-    end
-    local n = 0
-    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-        if obj:IsA("ValueBase") and n < 60 then
-            table.insert(dataLines, obj:GetFullName() .. " = " .. ser(obj.Value, 1))
-            n = n + 1
-        end
-    end
-    table.insert(dataLines, "LiveEventGetActive = (fetching...)")
-    dataLbl.Text = table.concat(dataLines, "\n")
-    pcall(function()
-        local r = Remotes["LiveEventGetActive"]
-        if r and r:IsA("RemoteFunction") then
-            local res = r:InvokeServer()
-            for i, l in ipairs(dataLines) do
-                if l:sub(1, 1) == "L" and l:find("^LiveEventGetActive") then dataLines[i] = "LiveEventGetActive = " .. ser(res) end
+    dataLines = {}
+    local cap = 900
+    local tree = nil
+    tree = function(obj, depth)
+        if #dataLines >= cap then return end
+        for _, c in ipairs(obj:GetChildren()) do
+            if #dataLines >= cap then return end
+            if c.Name:find("Pose") or c.Name:find("Armature") or c.Name:find("Initial") then
+                -- skip animation noise
+            else
+                local val = ""
+                if c:IsA("ValueBase") then val = " = " .. ser(c.Value, 2) end
+                table.insert(dataLines, string.rep("  ", depth) .. c.Name .. " [" .. c.ClassName .. "]" .. val)
+                if not c:IsA("Part") and not c:IsA("MeshPart") and not c:IsA("SurfaceGui") and not c:IsA("LocalScript") then
+                    tree(c, depth + 1)
+                end
             end
-            dataLbl.Text = table.concat(dataLines, "\n")
         end
-    end)
+    end
+    table.insert(dataLines, "== Player " .. LP.Name .. " ==")
+    tree(LP, 0)
+    table.insert(dataLines, "")
+    table.insert(dataLines, "== ReplicatedStorage ==")
+    tree(ReplicatedStorage, 0)
+    dataLbl.Text = table.concat(dataLines, "\n")
 end
 Btn(debugTab, "Scan Player Data", ScanData)
 Btn(debugTab, "Copy Player Data", function()
