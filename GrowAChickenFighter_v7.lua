@@ -381,6 +381,15 @@ local function RefreshRemoteLabel()
 end
 RefreshRemoteLabel()
 Btn(debugTab, "Refresh Remotes", function() ScanRemotes(); RefreshRemoteLabel(); Notify("Scanned: " .. tostring(#Remotes)) end)
+Btn(debugTab, "Copy Remote List", function()
+    local names = {}
+    for n in pairs(Remotes) do table.insert(names, n) end
+    table.sort(names)
+    local txt = #names == 0 and "(no remotes found)" or table.concat(names, "\n")
+    local ok = pcall(function() setclipboard(txt) end)
+    if not ok then ok = pcall(function() game:GetService("Clipboard"):settext(txt) end) end
+    Notify(ok and "Copied " .. tostring(#names) .. " names" or "Copy failed")
+end)
 Section(debugTab, "LOOP STATUS")
 local statusLbl = Instance.new("TextLabel", debugTab)
 statusLbl.Size = UDim2.new(1, 0, 0, 200)
