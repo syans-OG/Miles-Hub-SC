@@ -373,12 +373,9 @@ local tower = CreateTab("Tower")
 Section(tower, "TOWER")
 Toggle(tower, "Auto Tower Grind", false, function(v) Flags.AutoTower = v end)
 Slider(tower, "Target Floor", 1, 100, 20, "", function(v) Flags.TargetFloor = v end)
-Toggle(tower, "Encourage Before Fight", true, function(v) Flags.FeedBefore = v end)
+Toggle(tower, "Level delay before fight", true, function(v) Flags.FeedBefore = v end)
 Section(tower, "REBIRTH")
-Toggle(tower, "Auto Rebirth (game native)", false, function(v)
-    Fire("SetAutoRebirth", v)
-    Flags.AutoRebirth = v
-end)
+Toggle(tower, "Rebirth after target", false, function(v) Flags.AutoRebirth = v end)
 Btn(tower, "Rebirth Now (Manual)", function() Fire("Rebirth") end)
 
 -- --- TAB: EVENT ---
@@ -664,8 +661,11 @@ listenTower()
 task.spawn(function()
     while task.wait(2) do
         if Flags.AutoTower and towerState.ready then
-            if Flags.FeedBefore then Fire("EncourageChicken") end
             if not towerState.grinding then
+                if Flags.FeedBefore then
+                    SetStatus("Tower", "feeding/leveling...")
+                    task.wait(math.random(2, 4))
+                end
                 Fire("TowerStart")
                 towerState.grinding = true
             end
@@ -687,14 +687,17 @@ task.spawn(function()
     end
 end)
 
--- Auto join events
+-- Auto join events: ordering chickens to chaos mode = join fighting events
 task.spawn(function()
     while task.wait(7) do
         if Flags.AutoEvents then
             for _, en in ipairs(eventOptions) do
-                if Flags.Events[en] then Fire("EventRsvp", en) end
+                if Flags.Events[en] then
+                    Fire("SetChickenOrder", "chaos")
+                    break
+                end
             end
-            SetStatus("Events", "fired")
+            SetStatus("Events", "chaos (fighting)")
             RefreshStatus()
         end
     end
