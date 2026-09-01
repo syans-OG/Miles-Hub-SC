@@ -320,10 +320,13 @@ local function HookDataEvents()
     for _, root in ipairs(roots) do
         for _, r in ipairs(root:GetDescendants()) do
             if r:IsA("RemoteEvent") and not hookedEvents[r] then
+                local full = r:GetFullName():lower()
                 local nm = r.Name:lower()
-                local hit = false
-                for _, k in ipairs(kw) do
-                    if nm:find(k, 1, true) then hit = true break end
+                local hit = full:find("dataservice") or nm:find("dataservice")
+                if not hit and nm ~= "remotevent" and nm ~= "remoteevent" then
+                    for _, k in ipairs(kw) do
+                        if nm:find(k, 1, true) then hit = true break end
+                    end
                 end
                 if hit then
                     hookedEvents[r] = true
@@ -336,7 +339,13 @@ local function HookDataEvents()
                                 outArr[#outArr + 1] = "#" .. i
                                 deepSer(a, 1, outArr, 60, {})
                             end
-                            eventsLog[#eventsLog + 1] = r.Name .. " <- " .. table.concat(outArr, " ")
+                            local keys = ""
+                            if type(args[2]) == "table" then
+                                local ks = {}
+                                for _, kv in ipairs(args[2]) do ks[#ks + 1] = tostring(kv) end
+                                keys = "[" .. table.concat(ks, ",") .. "] "
+                            end
+                            eventsLog[#eventsLog + 1] = r.Name .. keys .. " <- " .. table.concat(outArr, " ")
                             if #eventsLog > 60 then table.remove(eventsLog, 1) end
                         end)
                     end)

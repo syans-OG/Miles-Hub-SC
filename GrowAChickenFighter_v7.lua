@@ -365,7 +365,7 @@ Toggle(egg, "Auto Fuse Duplicate", false, function(v) Flags.AutoFuse = v end)
 local farm = CreateTab("Farm")
 Section(farm, "UPGRADES")
 Toggle(farm, "Auto Buy + Upgrade Coop", false, function(v) Flags.AutoCoop = v end)
-Toggle(farm, "Auto Buy + Upgrade Feeder", false, function(v) Flags.AutoFeeder = v end)
+Toggle(farm, "Auto Buy + Upgrade Generator (Feeder)", false, function(v) Flags.AutoFeeder = v end)
 Toggle(farm, "Auto Upgrade Recycler", false, function(v) Flags.AutoRecycler = v end)
 
 -- --- TAB: TOWER ---
@@ -610,7 +610,7 @@ task.spawn(function()
     end
 end)
 
--- Auto farm upgrades (Feeder: no remote in game - auto buy tag removed)
+-- Auto farm upgrades (Feeder = corn generator: Buy/UpgradeGenerator)
 task.spawn(function()
     while task.wait(5) do
         if Flags.AutoCoop then
@@ -618,7 +618,12 @@ task.spawn(function()
             SetStatus("Coop", "fired")
         else SetStatus("Coop", "off") end
         if Flags.AutoFeeder then
-            SetStatus("Feeder", "no remote available")
+            for slot = 1, 4 do
+                Fire("BuyGenerator", slot)
+                task.wait(0.2)
+                Fire("UpgradeGenerator", slot)
+            end
+            SetStatus("Feeder", "gen 1-4")
         else SetStatus("Feeder", "off") end
         if Flags.AutoRecycler then
             Fire("UpgradeRecycler")
