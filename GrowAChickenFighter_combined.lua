@@ -1,5 +1,10 @@
 --[[
-    ⚡ Miles-HUB v2.3 — COMBINED (all features, no HTTP dependency)
+    ⚡ Miles-HUB v2.4 — COMBINED (all features, no HTTP dependency)
+    
+    Paste this ENTIRE script into your executor's editor, then click EXECUTE.
+    Do NOT use loadstring with HttpGet — your executor doesn't support it.
+    
+    Hotkey: RightShift = Toggle GUI on/off
     
     Run this DIRECTLY in your executor (no loader needed).
     Every step has a VISIBLE notification so you know exactly where it stops.
@@ -143,7 +148,7 @@ local function Notify(text)
     end)
 end
 
-Notify("Step 1: Script loaded OK")
+Notify("v2.4 Loaded OK")
 
 -- ═══ STEP 2: Character (with TIMEOUT — won't hang) ═══
 local Char, Hum, HRP
@@ -824,7 +829,17 @@ pcall(function()
     end
 end)
 
+-- ═══ RightShift keybind to toggle GUI ═══
+pcall(function()
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.RightShift then
+            gui.Enabled = not gui.Enabled
+        end
+    end)
+end)
+
 -- ═══ DONE ═══
 Notify("Step 6+7: GUI OK — All loaded! ⚡")
-print("[Miles-HUB] v2.3 COMBINED loaded successfully ✓")
-print("[Miles-HUB] If you don't see the GUI, check: gethui(), CoreGui, PlayerGui permissions")
+print("[Miles-HUB] v2.4 COMBINED loaded successfully ✓")
+print("[Miles-HUB] RightShift to toggle GUI")
