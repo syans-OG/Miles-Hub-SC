@@ -504,6 +504,94 @@ local function ser(v, d)
     return "{" .. table.concat(t, ", ") .. "}"
 end
 
+-- Deep serializer with cycle guard (for ModuleScript data tables)
+local function deepSer(v, d, out, cap, seen)
+    if #out >= cap then return end
+    d = d or 0
+    local pad = string.rep("  ", d)
+    if type(v) == "table" then
+        if seen[v] then out[#out + 1] = pad .. "(cycle)"; return end
+        seen[v] = true
+        local keys = {}
+        for k in pairs(v) do keys[#keys + 1] = k end
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+        if #keys == 0 then out[#out + 1] = pad .. "{}"; return end
+        if d > 3 then out[#out + 1] = pad .. "{...}"; return end
+        for _, k in ipairs(keys) do
+            if #out >= cap then return end
+            local val = v[k]
+            local vt = type(val)
+            local line = pad .. tostring(k) .. " = "
+            if vt == "table" then
+                out[#out + 1] = line .. "{"
+                deepSer(val, d + 1, out, cap, seen)
+            elseif vt == "function" then
+                out[#out + 1] = line .. "fn"
+            elseif vt == "userdata" then
+                out[#out + 1] = line .. "ud"
+            else
+                out[#out + 1] = line .. tostring(val)
+            end
+        end
+    else
+        out[#out + 1] = pad .. tostring(v)
+    end
+end
+
+local function DumpModuleData()
+    local roots = { ReplicatedStorage }
+    local lpPs = LP:FindFirstChild("PlayerScripts")
+    if lpPs then roots[#roots + 1] = lpPs end
+    local candidates = {}
+    local kw = { egg = true, chick = true, shop = true, config = true, data = true, item = true, reward = true, animal = true, def = true, index = true }
+    for _, root in ipairs(roots) do
+        for _, m in ipairs(root:GetDescendants()) do
+            if m:IsA("ModuleScript") then
+                local n = m.Name:lower()
+                for k in pairs(kw) do
+                    if n:find(k, 1, true) then candidates[#candidates + 1] = m; break end
+                end
+            end
+        end
+    end
+    local out = {}
+    for i = 1, math.min(#candidates, 25) do
+        if #out >= 400 then break end
+        local m = candidates[i]
+        local bc
+        local ok1 = pcall(function() bc = getscriptbytecode(m) end)
+        local f = nil
+        if ok1 and bc and bc ~= "" then
+            local ok2 = pcall(function() f = loadstring(bc) end)
+            if ok2 and f then
+                local rok, res = pcall(f)
+                if rok and type(res) == "table" then
+                    out[#out + 1] = "== " .. m:GetFullName() .. " =="
+                    deepSer(res, 1, out, 400, {})
+                elseif rok then
+                    out[#out + 1] = "== " .. m:GetFullName() .. " -> " .. tostring(res)
+                else
+                    out[#out + 1] = "== " .. m:GetFullName() .. " (run error)"
+                end
+            else
+                out[#out + 1] = "== " .. m:GetFullName() .. " (bad bytecode)"
+            end
+        else
+            local rok, res = pcall(require, m)
+            if rok and type(res) == "table" then
+                out[#out + 1] = "== " .. m:GetFullName() .. " =="
+                deepSer(res, 1, out, 400, {})
+            else
+                out[#out + 1] = "== " .. m:GetFullName() .. " (no access)"
+            end
+        end
+    end
+    if #out == 0 then out[1] = "(no candidate modules found)" end
+    dataLines = out
+    dataLbl.Text = table.concat(out, "\n")
+    Notify("Module candidates: " .. tostring(#candidates))
+end
+
 local dataLines = {}
 local function scanOneLevel(root, max)
     local n = 0
@@ -653,6 +741,7 @@ Btn(debugTab, "Show Captured", function()
     dataLbl.Text = table.concat(t, "\n")
     Notify(#t .. " captured")
 end)
+Btn(debugTab, "Dump Module Data", DumpModuleData)
 
 -- Activate first tab
 for name, frame in pairs(tabContent) do
