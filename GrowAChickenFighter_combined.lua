@@ -1,223 +1,25 @@
 --[[
-    ⚡ Miles-HUB v2.4 — COMBINED (all features, no HTTP dependency)
+    ⚡ Miles-HUB v2.5 — Grow A Chicken Fighter
     
-    Paste this ENTIRE script into your executor's editor, then click EXECUTE.
-    Do NOT use loadstring with HttpGet — your executor doesn't support it.
+    CRITICAL FIX: GUI created FIRST, features connect lazily.
+    This avoids Byfron/anti-cheat kick from early RunService connections.
     
-    Hotkey: RightShift = Toggle GUI on/off
-    
-    Run this DIRECTLY in your executor (no loader needed).
-    Every step has a VISIBLE notification so you know exactly where it stops.
-    
-    Features:
-    - Full GUI with tabs (Home, Egg, Farm, Upgrade, Settings)
-    - Auto Hatch / Sell / Fuse
-    - Tower & Rebirth
-    - Farm Upgrades
-    - WalkSpeed / JumpPower / InfJump / NoClip
-    - Anti-AFK
-    - Server Hop
+    Usage: paste entire script into executor, click EXECUTE
+    Hotkey: RightShift = Toggle GUI
 ]]
 
--- ═══ STEP 0: Error trap — catch EVERYTHING so script never silently dies ═══
-local function SafeCall(fn, ...)
-    local ok, err = pcall(fn, ...)
-    if not ok then warn("[Miles-HUB] Error:", err) end
-    return ok, err
-end
-
--- ═══ STEP 1: Basic services (instant, no wait) ═══
-task.wait(1)
-
+-- ═══ STEP 1: GUI FIRST (before ANY service connections) ═══
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
-
 local LP = Players.LocalPlayer
 
-print("[Miles-HUB] v2.3 starting...")
-print("[Miles-HUB] Player:", LP.Name)
-print("[Miles-HUB] Executor:", (identifyexecutor and identifyexecutor()) or "unknown")
+print("[Miles-HUB] v2.5 starting...")
 
--- ═══ VISIBLE NOTIFICATION SYSTEM ═══
--- Creates a small on-screen notification that ALWAYS shows,
--- even when StarterGui:SetCore doesn't work on your executor.
-
-local NotifGui = Instance.new("ScreenGui")
-NotifGui.Name = "MilesHub_Notif"
-NotifGui.ResetOnSpawn = false
-NotifGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-NotifGui.DisplayOrder = 999999
-NotifGui.IgnoreGuiInset = true
-
--- Find best parent for notification GUI
-local notifParent = nil
-local parentNames = {}
-
--- Try gethui() first (executors like Synapse, KRNL, Fluxus)
-if gethui and type(gethui) == "function" then
-    local ok, hui = pcall(gethui)
-    if ok and hui then
-        local ok2 = pcall(function() NotifGui.Parent = hui end)
-        if ok2 and NotifGui.Parent then
-            notifParent = hui
-            table.insert(parentNames, "gethui ✓")
-        end
-    end
-end
-
--- Try CoreGui
-if not notifParent then
-    local ok = pcall(function() NotifGui.Parent = game:GetService("CoreGui") end)
-    if ok and NotifGui.Parent then
-        notifParent = NotifGui.Parent
-        table.insert(parentNames, "CoreGui ✓")
-    else
-        table.insert(parentNames, "CoreGui ✗")
-    end
-end
-
--- Try PlayerGui (last resort)
-if not notifParent then
-    local ok = pcall(function() NotifGui.Parent = LP:WaitForChild("PlayerGui", 5) end)
-    if ok and NotifGui.Parent then
-        notifParent = NotifGui.Parent
-        table.insert(parentNames, "PlayerGui ✓")
-    else
-        table.insert(parentNames, "PlayerGui ✗")
-    end
-end
-
-print("[Miles-HUB] GUI parents tried:", table.concat(parentNames, ", "))
-
--- Notify function: shows BOTH on-screen toast AND console print
-local function Notify(text)
-    print("[Miles-HUB] >> " .. text)
-    
-    -- StarterGui:SetCore notification (works on some executors)
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = "⚡ Miles-HUB",
-            Text = text,
-            Duration = 5
-        })
-    end)
-    
-    -- VISIBLE on-screen toast (always works)
-    pcall(function()
-        local toast = Instance.new("Frame")
-        toast.Size = UDim2.new(0, 300, 0, 50)
-        toast.Position = UDim2.new(0.5, -150, 0, 10)
-        toast.BackgroundColor3 = Color3.fromRGB(30, 20, 50)
-        toast.BorderSizePixel = 0
-        toast.ZIndex = 1000000
-        toast.Parent = NotifGui
-        Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 8)
-        local stroke = Instance.new("UIStroke", toast)
-        stroke.Color = Color3.fromRGB(130, 90, 220)
-        stroke.Thickness = 1
-        
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -16, 1, 0)
-        label.Position = UDim2.new(0, 8, 0, 0)
-        label.BackgroundTransparency = 1
-        label.Text = "⚡ " .. text
-        label.TextColor3 = Color3.fromRGB(240, 240, 240)
-        label.Font = Enum.Font.GothamBold
-        label.TextSize = 12
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.TextWrapped = true
-        label.ZIndex = 1000001
-        label.Parent = toast
-        
-        -- Auto-destroy after 4 seconds
-        task.delay(4, function()
-            if toast and toast.Parent then
-                -- Fade out
-                for i = 0, 10 do
-                    toast.BackgroundTransparency = i / 10
-                    label.TextTransparency = i / 10
-                    task.wait(0.05)
-                end
-                toast:Destroy()
-            end
-        end)
-    end)
-end
-
-Notify("v2.4 Loaded OK")
-
--- ═══ STEP 2: Character (with TIMEOUT — won't hang) ═══
-local Char, Hum, HRP
-local charReady = false
-
-local function SetupCharacter(c)
-    Char = c
-    Hum = nil
-    HRP = nil
-    pcall(function()
-        Hum = c:WaitForChild("Humanoid", 10)
-        HRP = c:WaitForChild("HumanoidRootPart", 10)
-    end)
-    charReady = (Hum and HRP) and true or false
-end
-
-if LP.Character then
-    SetupCharacter(LP.Character)
-end
-LP.CharacterAdded:Connect(SetupCharacter)
-
--- Wait max 5 seconds for character
-for i = 1, 10 do
-    if charReady then break end
-    task.wait(0.5)
-end
-
-if charReady then
-    Notify("Step 2: Character OK")
-else
-    Notify("Step 2: Character delayed (GUI still works)")
-end
-
--- ═══ STEP 3: Remote Scanner ═══
-local Remotes = {}
-pcall(function()
-    task.wait(1)
-    for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            Remotes[obj.Name] = obj
-        end
-    end
-end)
-
-local rCount = 0
-for _ in pairs(Remotes) do rCount = rCount + 1 end
-Notify("Step 3: Found " .. rCount .. " remotes")
-
--- Print remote names for debugging
-for name, _ in pairs(Remotes) do
-    print("[Miles-HUB] Remote:", name)
-end
-
--- ═══ Safe Remote Fire ═══
-local function Fire(name, ...)
-    local r = Remotes[name]
-    if not r then return false end
-    task.wait(math.random(50, 150) / 1000)
-    pcall(function()
-        if r:IsA("RemoteEvent") then
-            r:FireServer(...)
-        else
-            r:InvokeServer(...)
-        end
-    end)
-    return true
-end
-
--- ═══ Flags ═══
+-- ═══ Flags (define early, used by GUI) ═══
 local Flags = {
     InfJump = false,
     NoClip = false,
@@ -240,160 +42,73 @@ local Flags = {
     FarmSpeed = 0.1,
 }
 
--- ═══ STEP 4: Client-side features ═══
+-- ═══ Feature connections (lazy — only active when flag is ON) ═══
+local FeatureConnections = {}
 
--- InfJump
-pcall(function()
-    UserInputService.JumpRequest:Connect(function()
-        if Flags.InfJump and Hum then
-            Hum:ChangeState(Enum.HumanoidStateType.Jumping)
+local function DisconnectFeature(name)
+    if FeatureConnections[name] then
+        pcall(function() FeatureConnections[name]:Disconnect() end)
+        FeatureConnections[name] = nil
+    end
+end
+
+local function ConnectInfJump()
+    DisconnectFeature("InfJump")
+    FeatureConnections["InfJump"] = UserInputService.JumpRequest:Connect(function()
+        if Flags.InfJump then
+            local c = LP.Character
+            if c then
+                local h = c:FindFirstChildOfClass("Humanoid")
+                if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+            end
         end
     end)
-end)
+end
 
--- NoClip
-RunService.Stepped:Connect(function()
-    if Flags.NoClip and Char then
-        for _, p in ipairs(Char:GetDescendants()) do
-            if p:IsA("BasePart") and p.CanCollide and p.Name ~= "HumanoidRootPart" then
-                p.CanCollide = false
-            end
-        end
-    end
-end)
-
--- Speed/Jump heartbeat
-RunService.Heartbeat:Connect(function()
-    if Hum then
-        if Flags.WalkSpeed > 16 then Hum.WalkSpeed = Flags.WalkSpeed end
-        if Flags.JumpPower > 50 then Hum.JumpPower = Flags.JumpPower end
-    end
-end)
-
--- Anti-AFK
-pcall(function()
-    local VirtualUser = game:GetService("VirtualUser")
-    LP.Idled:Connect(function()
-        if Flags.AntiAFK then
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new(0, 0))
-        end
-    end)
-end)
-
--- Rejoin on disconnect
-pcall(function()
-    game:GetService("GuiService").ErrorMessageChanged:Connect(function()
-        if Flags.AutoReconnect then
-            task.wait(2)
-            TeleportService:Teleport(game.PlaceId, LP)
-        end
-    end)
-end)
-
-Notify("Step 4: Client features OK")
-
--- ═══ STEP 5: Background auto loops ═══
-
--- Auto Hatch loop
-task.spawn(function()
-    while true do
-        if Flags.AutoHatch then
-            pcall(function() Fire("HatchEgg", Flags.SelectedEgg, 1) end)
-            if Flags.AutoSellOnHatch then
-                task.wait(0.2)
-                pcall(function() Fire("SellChicken", "All") end)
-            end
-        end
-        task.wait(Flags.HatchDelay)
-    end
-end)
-
--- Auto Fuse loop
-task.spawn(function()
-    while true do
-        if Flags.AutoFuse then
-            pcall(function() Fire("FuseChicken", "AutoFuseDuplicates", true) end)
-        end
-        task.wait(2)
-    end
-end)
-
--- Auto Train loop
-task.spawn(function()
-    while true do
-        if Flags.AutoTrain then pcall(function() Fire("Train") end) end
-        if Flags.AutoPunch then pcall(function() Fire("Punch") end) end
-        task.wait(Flags.FarmSpeed)
-    end
-end)
-
--- Auto Tower loop
-task.spawn(function()
-    while true do
-        if Flags.AutoTowerGrind then
-            pcall(function()
-                Fire("FeedChicken", "All")
-                Fire("TowerFight", "Start")
-                Fire("TowerFight", "Attack")
-                Fire("TowerFight", "NextFloor")
-            end)
-        end
-        task.wait(0.3)
-    end
-end)
-
--- Auto Buy/Upgrade loop
-task.spawn(function()
-    while true do
-        pcall(function()
-            if Flags.AutoBuyCoop then
-                Fire("BuyCoop", "Buy")
-                Fire("UpgradeCoop", "Upgrade")
-            end
-            if Flags.AutoBuyFeeder then
-                Fire("BuyFeeder", "Buy")
-                Fire("UpgradeFeeder", "Upgrade")
-            end
-            if Flags.AutoBuyRecycler then
-                Fire("UpgradeRecycler", "Buy")
-                Fire("UpgradeRecycler", "Upgrade")
-            end
-        end)
-        task.wait(1)
-    end
-end)
-
--- Auto Collect Scrap loop
-task.spawn(function()
-    while true do
-        if Flags.AutoCollectScrap and Char and HRP then
-            pcall(function()
-                Fire("CollectScrap")
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if (obj:IsA("BasePart") or obj:IsA("Model")) then
-                        local nl = obj.Name:lower()
-                        if string.find(nl, "scrap") or string.find(nl, "trash") then
-                            local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
-                            if part and (part.Position - HRP.Position).Magnitude <= 50 then
-                                if firetouchinterest then
-                                    firetouchinterest(HRP, part, 0)
-                                    task.wait(0.05)
-                                    firetouchinterest(HRP, part, 1)
-                                end
-                            end
-                        end
+local function ConnectNoClip()
+    DisconnectFeature("NoClip")
+    FeatureConnections["NoClip"] = RunService.Stepped:Connect(function()
+        if Flags.NoClip then
+            local c = LP.Character
+            if c then
+                for _, p in ipairs(c:GetDescendants()) do
+                    if p:IsA("BasePart") and p.CanCollide and p.Name ~= "HumanoidRootPart" then
+                        p.CanCollide = false
                     end
                 end
-            end)
+            end
         end
-        task.wait(0.5)
-    end
-end)
+    end)
+end
 
-Notify("Step 5: Auto loops OK")
+local function ConnectSpeed()
+    DisconnectFeature("Speed")
+    FeatureConnections["Speed"] = RunService.Heartbeat:Connect(function()
+        local c = LP.Character
+        if c then
+            local h = c:FindFirstChildOfClass("Humanoid")
+            if h then
+                if Flags.WalkSpeed > 16 then h.WalkSpeed = Flags.WalkSpeed end
+                if Flags.JumpPower > 50 then h.JumpPower = Flags.JumpPower end
+            end
+        end
+    end)
+end
 
--- ═══ STEP 6: GUI ═══
+local function ConnectAntiAFK()
+    DisconnectFeature("AntiAFK")
+    pcall(function()
+        local VirtualUser = game:GetService("VirtualUser")
+        FeatureConnections["AntiAFK"] = LP.Idled:Connect(function()
+            if Flags.AntiAFK then
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new(0, 0))
+            end
+        end)
+    end)
+end
+
+-- ═══ Create GUI IMMEDIATELY ═══
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local guiW = isMobile and 280 or 400
 local guiH = isMobile and 350 or 480
@@ -404,45 +119,25 @@ gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.DisplayOrder = 999999
 
--- Mobile-safe parent — try ALL options, with extra safety
+-- Find parent
 local guiParent = nil
-
--- 1. gethui() — executor custom UI container
 pcall(function()
     if gethui and type(gethui) == "function" then
-        local hui = gethui()
-        if hui then
-            gui.Parent = hui
-            if gui.Parent then guiParent = hui end
-        end
+        local ok, hui = pcall(gethui)
+        if ok and hui then gui.Parent = hui; if gui.Parent then guiParent = hui end end
     end
 end)
-
--- 2. CoreGui — standard Roblox internal GUI
 if not guiParent then
-    pcall(function()
-        gui.Parent = game:GetService("CoreGui")
-        if gui.Parent then guiParent = gui.Parent end
-    end)
+    pcall(function() gui.Parent = game:GetService("CoreGui"); if gui.Parent then guiParent = gui.Parent end end)
 end
-
--- 3. PlayerGui — always works, but visible to other scripts
 if not guiParent then
     pcall(function()
         local pg = LP:WaitForChild("PlayerGui", 5)
-        if pg then
-            gui.Parent = pg
-            if gui.Parent then guiParent = pg end
-        end
+        if pg then gui.Parent = pg; if gui.Parent then guiParent = pg end end
     end)
 end
 
-if not guiParent then
-    warn("[Miles-HUB] CRITICAL: Could not parent GUI anywhere!")
-    Notify("ERROR: GUI parent failed!")
-else
-    print("[Miles-HUB] GUI parented to:", guiParent:GetFullName())
-end
+print("[Miles-HUB] GUI parent:", guiParent and guiParent:GetFullName() or "FAILED")
 
 local main = Instance.new("Frame", gui)
 main.Size = UDim2.new(0, guiW, 0, guiH)
@@ -465,7 +160,7 @@ local tt = Instance.new("TextLabel", tb)
 tt.Size = UDim2.new(1, -32, 1, 0)
 tt.Position = UDim2.new(0, 10, 0, 0)
 tt.BackgroundTransparency = 1
-tt.Text = "⚡ Miles-HUB v2.3"
+tt.Text = "⚡ Miles-HUB v2.5"
 tt.TextColor3 = Color3.fromRGB(240, 240, 240)
 tt.Font = Enum.Font.GothamBold
 tt.TextSize = 13
@@ -482,7 +177,7 @@ closeBtn.TextSize = 11
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
 closeBtn.MouseButton1Click:Connect(function() gui.Enabled = not gui.Enabled end)
 
--- Tab buttons (left sidebar)
+-- Tab buttons
 local tabBtns = Instance.new("Frame", main)
 tabBtns.Size = UDim2.new(0, isMobile and 70 or 90, 1, -36)
 tabBtns.Position = UDim2.new(0, 0, 0, 34)
@@ -490,7 +185,7 @@ tabBtns.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
 tabBtns.BorderSizePixel = 0
 Instance.new("UICorner", tabBtns).CornerRadius = UDim.new(0, 8)
 
--- Content area
+-- Content
 local content = Instance.new("Frame", main)
 content.Size = UDim2.new(1, isMobile and -76 or -96, 1, -40)
 content.Position = UDim2.new(0, isMobile and 74 or 94, 0, 36)
@@ -499,12 +194,12 @@ content.BackgroundTransparency = 1
 local tabContent = {}
 local tabBtnList = {}
 
--- ═══ UI Helper functions ═══
-local function CreateTab(name, icon)
+-- ═══ UI Helpers ═══
+local function CreateTab(name)
     local btn = Instance.new("TextButton", tabBtns)
     btn.Size = UDim2.new(1, -6, 0, 28)
     btn.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-    btn.Text = (icon or "") .. " " .. name
+    btn.Text = " " .. name
     btn.TextColor3 = Color3.fromRGB(160, 160, 170)
     btn.Font = Enum.Font.GothamSemibold
     btn.TextSize = isMobile and 8 or 10
@@ -681,6 +376,31 @@ local function Slider(parent, name, min, max, default, suffix, callback)
     end)
 end
 
+-- ═══ Remote Scanner (safe — no connections) ═══
+local Remotes = {}
+pcall(function()
+    for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            Remotes[obj.Name] = obj
+        end
+    end
+end)
+
+local rCount = 0
+for _ in pairs(Remotes) do rCount = rCount + 1 end
+print("[Miles-HUB] Found " .. rCount .. " remotes")
+
+local function Fire(name, ...)
+    local r = Remotes[name]
+    if not r then return false end
+    task.wait(math.random(50, 150) / 1000)
+    pcall(function()
+        if r:IsA("RemoteEvent") then r:FireServer(...)
+        else r:InvokeServer(...) end
+    end)
+    return true
+end
+
 -- ═══ TAB: HOME ═══
 local home = CreateTab("Home")
 Section(home, "ℹ️ INFO")
@@ -700,17 +420,33 @@ Btn(home, "Server Hop (Sepi)", function()
             end
         end
     end)
-    Notify("No empty server found")
 end)
 
 Section(home, "🏃 MOVEMENT")
-Toggle(home, "Inf Jump", false, function(v) Flags.InfJump = v end)
-Toggle(home, "NoClip", false, function(v) Flags.NoClip = v end)
-Slider(home, "WalkSpeed", 16, 250, 16, " Spd", function(v) Flags.WalkSpeed = v end)
-Slider(home, "JumpPower", 50, 300, 50, " Pwr", function(v) Flags.JumpPower = v end)
+Toggle(home, "Inf Jump", false, function(v)
+    Flags.InfJump = v
+    if v then ConnectInfJump() else DisconnectFeature("InfJump") end
+end)
+Toggle(home, "NoClip", false, function(v)
+    Flags.NoClip = v
+    if v then ConnectNoClip() else DisconnectFeature("NoClip") end
+end)
+Slider(home, "WalkSpeed", 16, 250, 16, " Spd", function(v)
+    Flags.WalkSpeed = v
+    if v > 16 and not FeatureConnections["Speed"] then ConnectSpeed() end
+    if v <= 16 and Flags.JumpPower <= 50 then DisconnectFeature("Speed") end
+end)
+Slider(home, "JumpPower", 50, 300, 50, " Pwr", function(v)
+    Flags.JumpPower = v
+    if v > 50 and not FeatureConnections["Speed"] then ConnectSpeed() end
+    if v <= 50 and Flags.WalkSpeed <= 16 then DisconnectFeature("Speed") end
+end)
 
 Section(home, "🛡️ SAFETY")
-Toggle(home, "Anti-AFK", true, function(v) Flags.AntiAFK = v end)
+Toggle(home, "Anti-AFK", true, function(v)
+    Flags.AntiAFK = v
+    if v then ConnectAntiAFK() else DisconnectFeature("AntiAFK") end
+end)
 Toggle(home, "Auto Rejoin on Kick", false, function(v) Flags.AutoReconnect = v end)
 
 -- ═══ TAB: EGG ═══
@@ -724,16 +460,14 @@ for _, eggName in ipairs(eggOptions) do
     Btn(egg, "Hatch " .. eggName, function()
         Flags.SelectedEgg = eggName
         Fire("HatchEgg", eggName, 1)
-        Notify("Hatching: " .. eggName)
     end)
 end
 
 Section(egg, "💰 SELL & FUSE")
 Toggle(egg, "Auto Sell All After Hatch", false, function(v) Flags.AutoSellOnHatch = v end)
-Btn(egg, "💵 Sell All Chickens Now", function() Fire("SellChicken", "All"); Notify("Sold all chickens!") end)
+Btn(egg, "💵 Sell All Chickens Now", function() Fire("SellChicken", "All") end)
 Toggle(egg, "Auto Fuse Duplicates", false, function(v) Flags.AutoFuse = v end)
-Btn(egg, "🧬 Fuse Now", function() Fire("FuseChicken", "AutoFuseDuplicates", true); Notify("Fuse sent!") end)
-Btn(egg, "⚡ Equip Best Chickens", function() Fire("EquipBest"); Notify("Equipped best!") end)
+Btn(egg, "🧬 Fuse Now", function() Fire("FuseChicken", "AutoFuseDuplicates", true) end)
 
 -- ═══ TAB: FARM ═══
 local farm = CreateTab("Farm")
@@ -741,45 +475,23 @@ Section(farm, "🗼 TOWER")
 Toggle(farm, "Auto Tower Grind", false, function(v) Flags.AutoTowerGrind = v end)
 Btn(farm, "⚔️ Start Tower", function() Fire("TowerFight", "Start") end)
 Btn(farm, "🗡️ Attack", function() Fire("TowerFight", "Attack") end)
-Btn(farm, "⬆️ Next Floor", function() Fire("TowerFight", "NextFloor") end)
 
 Section(farm, "💪 TRAIN & FIGHT")
 Toggle(farm, "Auto Train", false, function(v) Flags.AutoTrain = v end)
 Toggle(farm, "Auto Punch", false, function(v) Flags.AutoPunch = v end)
 Slider(farm, "Farm Speed", 0.05, 1, 0.1, "s", function(v) Flags.FarmSpeed = v end)
 
-Section(farm, "♻️ REBIRTH")
-Btn(farm, "🔄 Rebirth Now", function()
-    Fire("CollectScrap")
-    task.wait(0.1)
-    Fire("RecycleScrap", "All")
-    task.wait(0.1)
-    Fire("Rebirth", "DoRebirth")
-    Notify("Rebirth executed!")
-end)
-
 Section(farm, "📦 COLLECT")
-Btn(farm, "🥚 Collect Eggs", function() Fire("CollectEgg"); Notify("Collect eggs sent!") end)
 Toggle(farm, "Auto Collect Scrap", false, function(v) Flags.AutoCollectScrap = v end)
 
 -- ═══ TAB: UPGRADE ═══
 local upgrade = CreateTab("Upgrade")
 Section(upgrade, "🏠 COOP")
 Toggle(upgrade, "Auto Buy + Upgrade Coop", false, function(v) Flags.AutoBuyCoop = v end)
-Btn(upgrade, "Buy Coop", function() Fire("BuyCoop", "Buy") end)
-Btn(upgrade, "Upgrade Coop", function() Fire("UpgradeCoop", "Upgrade") end)
-
 Section(upgrade, "🍽️ FEEDER")
 Toggle(upgrade, "Auto Buy + Upgrade Feeder", false, function(v) Flags.AutoBuyFeeder = v end)
-Btn(upgrade, "Buy Feeder", function() Fire("BuyFeeder", "Buy") end)
-Btn(upgrade, "Upgrade Feeder", function() Fire("UpgradeFeeder", "Upgrade") end)
-
 Section(upgrade, "♻️ RECYCLER")
 Toggle(upgrade, "Auto Upgrade Recycler", false, function(v) Flags.AutoBuyRecycler = v end)
-Btn(upgrade, "Upgrade Recycler", function() Fire("UpgradeRecycler", "Buy"); Fire("UpgradeRecycler", "Upgrade") end)
-
-Section(upgrade, "🍗 FEED")
-Btn(upgrade, "Feed All Chickens", function() Fire("FeedChicken", "All"); Notify("Fed all chickens!") end)
 
 -- ═══ Activate first tab ═══
 for name, frame in pairs(tabContent) do
@@ -789,26 +501,26 @@ for name, frame in pairs(tabContent) do
     break
 end
 
--- ═══ STEP 7: Floating toggle button ═══
+-- ═══ RightShift keybind ═══
 pcall(function()
-    local floatGui = Instance.new("ScreenGui")
-    floatGui.Name = "MilesHub_Float"
-    floatGui.ResetOnSpawn = false
-    floatGui.DisplayOrder = 999999
-
-    local floatParent = nil
-    for _, p in ipairs({
-        gethui and type(gethui) == "function" and gethui() or nil,
-        guiParent,  -- Use same parent as main GUI
-    }) do
-        if p then
-            local ok = pcall(function() floatGui.Parent = p end)
-            if ok and floatGui.Parent then floatParent = p break end
+    UserInputService.InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if input.KeyCode == Enum.KeyCode.RightShift then
+            gui.Enabled = not gui.Enabled
         end
-    end
+    end)
+end)
 
-    if floatGui.Parent then
-        local fb = Instance.new("TextButton", floatGui)
+-- ═══ Floating button ═══
+pcall(function()
+    local fg = Instance.new("ScreenGui")
+    fg.Name = "MilesHub_Float"
+    fg.ResetOnSpawn = false
+    fg.DisplayOrder = 999999
+    pcall(function() fg.Parent = guiParent end)
+    if not fg.Parent then pcall(function() fg.Parent = LP:WaitForChild("PlayerGui", 5) end) end
+    if fg.Parent then
+        local fb = Instance.new("TextButton", fg)
         fb.Size = UDim2.new(0, 50, 0, 50)
         fb.Position = UDim2.new(0, 10, 0.3, 0)
         fb.BackgroundColor3 = Color3.fromRGB(20, 16, 35)
@@ -822,24 +534,76 @@ pcall(function()
         fb.BorderSizePixel = 0
         Instance.new("UICorner", fb).CornerRadius = UDim.new(0.5, 0)
         Instance.new("UIStroke", fb).Color = Color3.fromRGB(168, 85, 247)
-
-        fb.MouseButton1Click:Connect(function()
-            gui.Enabled = not gui.Enabled
-        end)
+        fb.MouseButton1Click:Connect(function() gui.Enabled = not gui.Enabled end)
     end
 end)
 
--- ═══ RightShift keybind to toggle GUI ═══
+-- ═══ STEP 2: Background auto loops (safe — no RunService) ═══
+task.spawn(function()
+    while true do
+        if Flags.AutoHatch then
+            pcall(function() Fire("HatchEgg", Flags.SelectedEgg, 1) end)
+            if Flags.AutoSellOnHatch then
+                task.wait(0.2)
+                pcall(function() Fire("SellChicken", "All") end)
+            end
+        end
+        task.wait(Flags.HatchDelay)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if Flags.AutoFuse then pcall(function() Fire("FuseChicken", "AutoFuseDuplicates", true) end) end
+        task.wait(2)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if Flags.AutoTrain then pcall(function() Fire("Train") end) end
+        if Flags.AutoPunch then pcall(function() Fire("Punch") end) end
+        task.wait(Flags.FarmSpeed)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if Flags.AutoTowerGrind then
+            pcall(function()
+                Fire("FeedChicken", "All")
+                Fire("TowerFight", "Start")
+                Fire("TowerFight", "Attack")
+                Fire("TowerFight", "NextFloor")
+            end)
+        end
+        task.wait(0.3)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        pcall(function()
+            if Flags.AutoBuyCoop then Fire("BuyCoop", "Buy"); Fire("UpgradeCoop", "Upgrade") end
+            if Flags.AutoBuyFeeder then Fire("BuyFeeder", "Buy"); Fire("UpgradeFeeder", "Upgrade") end
+            if Flags.AutoBuyRecycler then Fire("UpgradeRecycler", "Buy"); Fire("UpgradeRecycler", "Upgrade") end
+        end)
+        task.wait(1)
+    end
+end)
+
+-- ═══ Auto-rejoin on disconnect ═══
 pcall(function()
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode.RightShift then
-            gui.Enabled = not gui.Enabled
+    game:GetService("GuiService").ErrorMessageChanged:Connect(function()
+        if Flags.AutoReconnect then
+            task.wait(2)
+            TeleportService:Teleport(game.PlaceId, LP)
         end
     end)
 end)
 
+-- ═══ Anti-AFK starts if enabled ═══
+if Flags.AntiAFK then ConnectAntiAFK() end
+
 -- ═══ DONE ═══
-Notify("Step 6+7: GUI OK — All loaded! ⚡")
-print("[Miles-HUB] v2.4 COMBINED loaded successfully ✓")
-print("[Miles-HUB] RightShift to toggle GUI")
+print("[Miles-HUB] v2.5 loaded ✓ — RightShift to toggle GUI")
