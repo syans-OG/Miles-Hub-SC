@@ -589,25 +589,40 @@ end)
 local function DumpTexts()
     local out = {}
     local function walk(o, depth)
-        if #out >= 250 then return end
+        if #out >= 300 then return end
         for _, c in ipairs(o:GetChildren()) do
-            if #out >= 250 then return end
-            if c:IsA("TextLabel") or c:IsA("TextButton") then
-                local t = c.Text
-                if t ~= "" then
-                    out[#out + 1] = string.rep(" ", math.min(depth, 3)) .. c.Name .. ": " .. t
+            if #out >= 300 then return end
+            if c:IsA("ScreenGui") then
+                if c.Enabled and c.Name ~= "MilesHub" and c.Name ~= "Float" then walk(c, depth + 1) end
+            elseif c:IsA("GuiObject") then
+                if c.Visible then
+                    if (c:IsA("TextLabel") or c:IsA("TextButton")) and c.Text ~= "" then
+                        out[#out + 1] = string.rep(" ", math.min(depth, 3)) .. c.Name .. ": " .. c.Text
+                    end
+                    walk(c, depth + 1)
                 end
+            else
+                walk(c, depth + 1)
             end
-            walk(c, depth + 1)
         end
     end
     walk(LP.PlayerGui, 0)
-    if #out == 0 then out[1] = "(no text found)" end
+    if #out == 0 then out[1] = "(no visible text found)" end
     dataLines = out
     dataLbl.Text = table.concat(out, "\n")
-    Notify("Dumped " .. tostring(#out) .. " texts")
+    Notify("Dumped " .. tostring(#out) .. " visible texts")
 end
-Btn(debugTab, "Dump GUI Texts", DumpTexts)
+Btn(debugTab, "Dump Visible GUI", DumpTexts)
+
+local function OpenRailAndDump(railName)
+    local rail = LP.PlayerGui:FindFirstChild("ArenaSideRail")
+    local btn = rail and deepFind(rail, railName)
+    if not clickBtn(btn) then Notify("Rail button not found: " .. railName); return end
+    Notify(railName .. " opened, dumping in 2s...")
+    task.delay(2, DumpTexts)
+end
+Btn(debugTab, "Open Shop > Dump", function() OpenRailAndDump("Shop") end)
+Btn(debugTab, "Open Flock > Dump", function() OpenRailAndDump("Flock") end)
 
 -- Activate first tab
 for name, frame in pairs(tabContent) do
