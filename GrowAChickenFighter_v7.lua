@@ -321,6 +321,34 @@ Slider(egg, "Hatch Delay", 0.1, 2, 0.5, "s", function(v) Flags.HatchDelay = v en
 for _, en in ipairs(eggOptions) do
     Btn(egg, "Egg: " .. en, function() Flags.SelectedEgg = en; Notify(en) end)
 end
+local inRow = Instance.new("Frame", egg)
+inRow.Size = UDim2.new(1, 0, 0, 30)
+inRow.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+Instance.new("UICorner", inRow).CornerRadius = UDim.new(0, 6)
+local bx = Instance.new("TextBox", inRow)
+bx.Size = UDim2.new(0.7, -4, 0, 24)
+bx.Position = UDim2.new(0, 4, 0, 3)
+bx.PlaceholderText = "custom egg name"
+bx.ClearTextOnFocus = true
+bx.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+bx.BorderSizePixel = 0
+bx.Font = Enum.Font.Gotham
+bx.TextSize = 10
+bx.TextColor3 = Color3.fromRGB(240, 240, 240)
+Instance.new("UICorner", bx).CornerRadius = UDim.new(0, 6)
+local st = Instance.new("TextButton", inRow)
+st.Size = UDim2.new(0.26, -4, 0, 24)
+st.Position = UDim2.new(0.72, 0, 0, 3)
+st.BackgroundColor3 = Color3.fromRGB(130, 90, 220)
+st.Text = "Set"
+st.TextColor3 = Color3.fromRGB(240, 240, 240)
+st.Font = Enum.Font.GothamBold
+st.TextSize = 10
+Instance.new("UICorner", st).CornerRadius = UDim.new(0, 6)
+st.MouseButton1Click:Connect(function()
+    local t = bx.Text:gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
+    if t ~= "" then Flags.SelectedEgg = t; Notify("Egg set: " .. t) end
+end)
 Section(egg, "SELL AND FUSE")
 Toggle(egg, "Auto Sell After Hatch", false, function(v) Flags.AutoSell = v end)
 Toggle(egg, "Auto Fuse Duplicate", false, function(v) Flags.AutoFuse = v end)
@@ -557,6 +585,29 @@ Btn(debugTab, "Copy Player Data", function()
     if not ok then ok = pcall(function() game:GetService("Clipboard"):settext(txt) end) end
     Notify(ok and "Data copied" or "Copy failed")
 end)
+
+local function DumpTexts()
+    local out = {}
+    local function walk(o, depth)
+        if #out >= 250 then return end
+        for _, c in ipairs(o:GetChildren()) do
+            if #out >= 250 then return end
+            if c:IsA("TextLabel") or c:IsA("TextButton") then
+                local t = c.Text
+                if t ~= "" then
+                    out[#out + 1] = string.rep(" ", math.min(depth, 3)) .. c.Name .. ": " .. t
+                end
+            end
+            walk(c, depth + 1)
+        end
+    end
+    walk(LP.PlayerGui, 0)
+    if #out == 0 then out[1] = "(no text found)" end
+    dataLines = out
+    dataLbl.Text = table.concat(out, "\n")
+    Notify("Dumped " .. tostring(#out) .. " texts")
+end
+Btn(debugTab, "Dump GUI Texts", DumpTexts)
 
 -- Activate first tab
 for name, frame in pairs(tabContent) do
