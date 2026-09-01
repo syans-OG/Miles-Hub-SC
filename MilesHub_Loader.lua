@@ -136,27 +136,8 @@ local function UpdateStatus(text, progress)
     end
 end
 
--- ═══ STEP 1: Test HttpGet ═══
-UpdateStatus("Testing HttpGet...", 0.1)
-
-local httpOk, httpResult = pcall(function()
-    return game:HttpGet("https://httpstat.us/200")
-end)
-
-if not httpOk then
-    UpdateStatus("❌ HttpGet not available!", 1)
-    warn("[Miles-HUB Loader] CRITICAL: game:HttpGet() not supported by your executor!")
-    warn("[Miles-HUB Loader] Error: " .. tostring(httpResult))
-    task.wait(3)
-    if loadingGui then loadingGui:Destroy() end
-    return
-end
-
-UpdateStatus("HttpGet OK ✓", 0.2)
-task.wait(0.3)
-
--- ═══ STEP 2: Fetch game script ═══
-UpdateStatus("Fetching game script...", 0.3)
+-- ═══ STEP 1: Fetch game script directly ═══
+UpdateStatus("Fetching game script...", 0.2)
 
 local GAME_URL = "https://raw.githubusercontent.com/syans-OG/Miles-Hub-SC/main/GrowAChickenFighter_game.lua"
 
