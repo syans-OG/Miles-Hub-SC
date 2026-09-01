@@ -327,9 +327,12 @@ local tower = CreateTab("Tower")
 Section(tower, "TOWER")
 Toggle(tower, "Auto Tower Grind", false, function(v) Flags.AutoTower = v end)
 Slider(tower, "Target Floor", 1, 100, 20, "", function(v) Flags.TargetFloor = v end)
-Toggle(tower, "Feed Before Fight", true, function(v) Flags.FeedBefore = v end)
+Toggle(tower, "Encourage Before Fight", true, function(v) Flags.FeedBefore = v end)
 Section(tower, "REBIRTH")
-Toggle(tower, "Auto Rebirth", false, function(v) Flags.AutoRebirth = v end)
+Toggle(tower, "Auto Rebirth (game native)", false, function(v)
+    Fire("SetAutoRebirth", v)
+    Flags.AutoRebirth = v
+end)
 Btn(tower, "Rebirth Now (Manual)", function() Fire("Rebirth") end)
 
 -- --- TAB: EVENT ---
@@ -514,18 +517,19 @@ end)
 -- Auto Collect egg + incubator
 task.spawn(function()
     while task.wait(1.5) do
-        if Flags.AutoCollect then SetStatus("Collect", Fire("CollectEgg") and "fired" or "no remote") end
-        if Flags.AutoClaimIncubator then SetStatus("Incubator", Fire("ClaimIncubator") and "fired" or "no remote") end
+        if Flags.AutoCollect then SetStatus("Collect", "auto (server-side)") end
+        if Flags.AutoClaimIncubator then SetStatus("Incubator", Fire("IncubatorClaim") and "fired" or "no remote") end
         if Flags.AutoCollect or Flags.AutoClaimIncubator then RefreshStatus() end
     end
 end)
 
--- Auto Hatch + optional Sell
+-- Auto Hatch + incubator insert/claim + optional Sell
 task.spawn(function()
     while task.wait(Flags.HatchDelay) do
         if Flags.AutoHatch then
             SetStatus("Hatch", Fire("HatchEgg", Flags.SelectedEgg, 1) and "fired" or "no remote")
-            if Flags.AutoSell then task.wait(0.3) SetStatus("Sell", Fire("SellChicken", "All") and "fired" or "no remote") end
+            if Flags.AutoClaimIncubator then Fire("IncubatorInsert", Flags.SelectedEgg) end
+            if Flags.AutoSell then task.wait(0.3) SetStatus("Sell", Fire("SellChickens", "All") and "fired" or "no remote") end
             RefreshStatus()
         end
     end
@@ -535,46 +539,38 @@ end)
 task.spawn(function()
     while task.wait(3) do
         if Flags.AutoFuse then
-            SetStatus("Fuse", Fire("FuseChicken", "Duplicates") and "fired" or "no remote")
+            SetStatus("Fuse", Fire("FuseChickens", "Duplicates") and "fired" or "no remote")
             RefreshStatus()
         end
     end
 end)
 
--- Auto farm upgrades
+-- Auto farm upgrades (Feeder: no remote in game - auto buy tag removed)
 task.spawn(function()
     while task.wait(5) do
         if Flags.AutoCoop then
-            if Fire("BuyCoop") then Fire("UpgradeCoop") end
+            Fire("ExpandCoop")
             SetStatus("Coop", "fired")
         else SetStatus("Coop", "off") end
         if Flags.AutoFeeder then
-            if Fire("BuyFeeder") then Fire("UpgradeFeeder") end
-            SetStatus("Feeder", "fired")
+            SetStatus("Feeder", "no remote available")
         else SetStatus("Feeder", "off") end
         if Flags.AutoRecycler then
-            if Fire("BuyRecycler") then Fire("UpgradeRecycler") end
+            Fire("UpgradeRecycler")
             SetStatus("Recycler", "fired")
         else SetStatus("Recycler", "off") end
         RefreshStatus()
     end
 end)
 
--- Auto Tower Grind + Feed Before + Auto Rebirth
+-- Auto Tower Grind + Feed Before + Auto Rebirth (native SetAutoRebirth)
 task.spawn(function()
     while task.wait(1.5) do
         if Flags.AutoTower then
-            if Flags.FeedBefore then Fire("FeedChicken", "All") end
-            Fire("TowerFight", "Start")
-            Fire("TowerFight", "Attack")
-            Fire("TowerFight", "NextFloor")
+            if Flags.FeedBefore then Fire("EncourageChicken") end
+            Fire("TowerStart")
+            Fire("TowerElevator")
             SetStatus("Tower", "fired")
-            if Flags.AutoRebirth then
-                Fire("CollectScrap")
-                Fire("RecycleScrap")
-                Fire("Rebirth")
-                SetStatus("Rebirth", "fired")
-            else SetStatus("Rebirth", "off") end
             RefreshStatus()
         end
     end
@@ -585,7 +581,7 @@ task.spawn(function()
     while task.wait(7) do
         if Flags.AutoEvents then
             for _, en in ipairs(eventOptions) do
-                if Flags.Events[en] then Fire("JoinEvent", en) end
+                if Flags.Events[en] then Fire("EventRsvp", en) end
             end
             SetStatus("Events", "fired")
             RefreshStatus()
