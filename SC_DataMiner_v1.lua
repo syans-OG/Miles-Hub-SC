@@ -172,23 +172,33 @@ end
 
 local captureOn = false
 local captured = {}
+local noisePatterns = { "Analytics", "ClientKit", "Telemetry", "ReportIssue", "Stats" }
+local function isNoise(path)
+    for _, p in ipairs(noisePatterns) do
+        if string.find(path, p, 1, true) then return true end
+    end
+    return false
+end
 pcall(function()
     if not hookmetamethod or not getnamecallmethod then return end
     local oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         local method = getnamecallmethod()
         if captureOn and not SelfFire and (method == "FireServer" or method == "InvokeServer") then
-            local args = { ... }
-            pcall(function()
-                local line = tostring(self) .. "("
-                local n = math.min(#args, 6)
-                for i = 1, n do
-                    local a = args[i]
-                    line = line .. (i > 1 and ", " or "") .. (typeof(a) == "Instance" and a.ClassName or ser(a, 2))
-                end
-                if #args > n then line = line .. ", ..." end
-                captured[#captured + 1] = line .. ")"
-                if #captured > 80 then table.remove(captured, 1) end
-            end)
+            local sPath = typeof(self) == "Instance" and tostring(self:GetFullName()) or tostring(self)
+            if not isNoise(sPath) then
+                local args = { ... }
+                pcall(function()
+                    local line = tostring(self) .. "("
+                    local n = math.min(#args, 6)
+                    for i = 1, n do
+                        local a = args[i]
+                        line = line .. (i > 1 and ", " or "") .. (typeof(a) == "Instance" and a.ClassName or ser(a, 2))
+                    end
+                    if #args > n then line = line .. ", ..." end
+                    captured[#captured + 1] = line .. ")"
+                    if #captured > 80 then table.remove(captured, 1) end
+                end)
+            end
         end
         return oldNamecall(self, ...)
     end)
