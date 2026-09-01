@@ -68,6 +68,7 @@ tabBtns.Position = UDim2.new(0, 0, 0, 34)
 tabBtns.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
 tabBtns.BorderSizePixel = 0
 Instance.new("UICorner", tabBtns).CornerRadius = UDim.new(0, 8)
+Instance.new("UIListLayout", tabBtns).Padding = UDim.new(0, 3)
 
 local content = Instance.new("Frame", main)
 content.Size = UDim2.new(1, isMobile and -76 or -96, 1, -40)
@@ -76,11 +77,14 @@ content.BackgroundTransparency = 1
 
 local tabContent = {}
 local tabBtnList = {}
+local tabCount = 0
 
 local function CreateTab(name)
     local btn = Instance.new("TextButton", tabBtns)
     btn.Size = UDim2.new(1, -6, 0, 28)
     btn.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+    tabCount = tabCount + 1
+    btn.LayoutOrder = tabCount
     btn.Text = " " .. name
     btn.TextColor3 = Color3.fromRGB(160, 160, 170)
     btn.Font = Enum.Font.GothamSemibold
