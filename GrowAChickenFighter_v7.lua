@@ -423,6 +423,72 @@ local function RefreshStatus()
     statusLbl.Text = #lines == 0 and "No loops running." or table.concat(lines, "\n")
 end
 
+-- PLAYER DATA READER (no F9 needed)
+Section(debugTab, "PLAYER DATA")
+local dataLbl = Instance.new("TextLabel", debugTab)
+dataLbl.Size = UDim2.new(1, 0, 0, 240)
+dataLbl.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+dataLbl.Text = "Press Scan Data."
+dataLbl.TextColor3 = Color3.fromRGB(200, 200, 200)
+dataLbl.Font = Enum.Font.Gotham
+dataLbl.TextSize = 9
+dataLbl.TextWrapped = true
+dataLbl.TextXAlignment = Enum.TextXAlignment.Left
+dataLbl.TextYAlignment = Enum.TextYAlignment.Top
+dataLbl.BorderSizePixel = 0
+Instance.new("UICorner", dataLbl).CornerRadius = UDim.new(0, 6)
+
+local function ser(v, d)
+    d = d or 0
+    if type(v) ~= "table" then return tostring(v) end
+    if d > 1 then return tostring(v) end
+    local t = {}
+    for k, val in pairs(v) do
+        table.insert(t, tostring(k) .. "=" .. ser(val, d + 1))
+    end
+    return "{" .. table.concat(t, ", ") .. "}"
+end
+
+local dataLines = {}
+local function ScanData()
+    dataLines = {"Player = " .. LP.Name}
+    local ls = LP:FindFirstChild("Leaderstats")
+    if ls then
+        for _, stat in ipairs(ls:GetChildren()) do
+            if stat:IsA("ValueBase") then table.insert(dataLines, "LS." .. stat.Name .. " = " .. ser(stat.Value)) end
+        end
+    else
+        table.insert(dataLines, "LS = (none)")
+    end
+    local n = 0
+    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+        if obj:IsA("ValueBase") and n < 60 then
+            table.insert(dataLines, obj:GetFullName() .. " = " .. ser(obj.Value, 1))
+            n = n + 1
+        end
+    end
+    table.insert(dataLines, "LiveEventGetActive = (fetching...)")
+    dataLbl.Text = table.concat(dataLines, "\n")
+    pcall(function()
+        local r = Remotes["LiveEventGetActive"]
+        if r and r:IsA("RemoteFunction") then
+            local res = r:InvokeServer()
+            for i, l in ipairs(dataLines) do
+                if l:sub(1, 1) == "L" and l:find("^LiveEventGetActive") then dataLines[i] = "LiveEventGetActive = " .. ser(res) end
+            end
+            dataLbl.Text = table.concat(dataLines, "\n")
+        end
+    end)
+end
+Btn(debugTab, "Scan Player Data", ScanData)
+Btn(debugTab, "Copy Player Data", function()
+    local txt = table.concat(dataLines, "\n")
+    if txt == "" then txt = "(no data)" end
+    local ok = pcall(function() setclipboard(txt) end)
+    if not ok then ok = pcall(function() game:GetService("Clipboard"):settext(txt) end) end
+    Notify(ok and "Data copied" or "Copy failed")
+end)
+
 -- Activate first tab
 for name, frame in pairs(tabContent) do
     frame.Visible = true
