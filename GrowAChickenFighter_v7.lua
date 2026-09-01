@@ -307,7 +307,7 @@ task.spawn(function()
     while task.wait(8) do ScanRemotes() end
 end)
 
-local eggOptions = { "Basic Egg", "Forest Egg", "Desert Egg", "Magma Egg", "Cyber Egg", "Void Egg" }
+local eggOptions = { "colossus", "KrakenEgg", "ascension", "trick", "demonic", "blessed", "basic" }
 local eventOptions = { "Hot Eggs", "UFO Invasion", "Golden Goose", "Chicken Boss" }
 
 -- --- TAB: EGG ---
@@ -458,59 +458,96 @@ local function scanOneLevel(root, max)
         table.insert(dataLines, c.Name .. " [" .. c.ClassName .. "]")
     end
 end
+local function deepFind(root, name)
+    if not root then return nil end
+    for _, c in ipairs(root:GetChildren()) do
+        if c.Name == name then return c end
+    end
+    for _, c in ipairs(root:GetChildren()) do
+        local r = deepFind(c, name)
+        if r then return r end
+    end
+    return nil
+end
+local function readRebirthText()
+    local rb = LP.PlayerGui:FindFirstChild("Rebirth")
+    if not rb then return "", "" end
+    local req, count = "", ""
+    local rc = deepFind(rb, "reqCard")
+    if rc then
+        local tl = deepFind(rc, "text")
+        if tl and tl:IsA("TextLabel") then req = tl.Text end
+    end
+    local cn = deepFind(rb, "count")
+    if cn then
+        local tl = deepFind(cn, "s2")
+        if tl and tl:IsA("TextLabel") then count = tl.Text end
+    end
+    return req, count
+end
+local function clickBtn(btn)
+    if not btn or not btn:IsDescendantOf(game) then return false end
+    local p = btn.AbsolutePosition + btn.AbsoluteSize / 2
+    local VIM = game:GetService("VirtualInputManager")
+    VIM:SendMouseButtonEvent(p.X, p.Y, 0, true, game, 1)
+    task.wait(0.08)
+    VIM:SendMouseButtonEvent(p.X, p.Y, 0, false, game, 1)
+    return true
+end
 local function ScanData()
     dataLines = {}
     table.insert(dataLines, "== ReplicatedStorage top ==")
     scanOneLevel(ReplicatedStorage, 50)
     local assets = ReplicatedStorage:FindFirstChild("Assets")
     if assets then
-        table.insert(dataLines, "== Assets children ==")
-        scanOneLevel(assets, 60)
-        for _, c in ipairs(assets:GetChildren()) do
-            if c:IsA("Folder") or c:IsA("Configuration") then
-                table.insert(dataLines, "  -- " .. c.Name .. " --")
-                scanOneLevel(c, 40)
-            end
-        end
+        table.insert(dataLines, "== Assets.Eggs ==")
+        local eggs = assets:FindFirstChild("Eggs")
+        if eggs then scanOneLevel(eggs, 40) end
+        table.insert(dataLines, "== Assets.Chickens ==")
+        local ch = assets:FindFirstChild("Chickens")
+        if ch then scanOneLevel(ch, 60) end
     end
+    table.insert(dataLines, "== Content (top) ==")
+    local content = ReplicatedStorage:FindFirstChild("Content")
+    if content then scanOneLevel(content, 40) end
     table.insert(dataLines, "== workspace top ==")
     scanOneLevel(game.Workspace, 60)
+    table.insert(dataLines, "== My plot ==")
+    local plot = game.Workspace:FindFirstChild(LP.Name)
+    if plot then scanOneLevel(plot, 40) else table.insert(dataLines, "(none)") end
+    table.insert(dataLines, "== Rebirth window ==")
+    local req, count = readRebirthText()
+    table.insert(dataLines, "reqText: " .. (req == "" and "(empty, opening UI...)" or req))
+    table.insert(dataLines, "count: " .. count)
     dataLbl.Text = table.concat(dataLines, "\n")
-    -- Rebirth window text (floor requirement, progress, bonus)
-    pcall(function()
-        local rb = LP.PlayerGui:FindFirstChild("Rebirth")
-        if rb then
-            local req = rb:FindFirstChild("Frame") and rb.Frame:FindFirstChild("window")
-            local text = ""
-            if req then
-                local bar = req:FindFirstChild("panel") and req.panel:FindFirstChild("content")
-                if bar then
-                    local t = bar:FindFirstChild("content") and bar.content:FindFirstChild("body")
-                    if t then
-                        local rc = t:FindFirstChild("reqCard")
-                        if rc then
-                            local lbl = rc:FindFirstChild("face") and rc.face:FindFirstChild("content")
-                            if lbl then
-                                local x = lbl:FindFirstChild("bar")
-                                if x then
-                                    local tl = x:FindFirstChild("text")
-                                    if tl and tl:IsA("TextLabel") then text = tl.Text end
-                                end
-                            end
-                        end
-                        local cn = t:FindFirstChild("count")
-                        if cn then
-                            local tl = cn:FindFirstChild("s2")
-                            if tl and tl:IsA("TextLabel") then text = text .. " | progress: " .. tl.Text end
-                        end
+    if req == "" then
+        local rail = LP.PlayerGui:FindFirstChild("ArenaSideRail")
+        local btn = rail and deepFind(rail, "Rebirth")
+        if clickBtn(btn) then
+            task.delay(1.5, function()
+                local r2, c2 = readRebirthText()
+                for i, l in ipairs(dataLines) do
+                    if l:sub(1, 2) == "re" and l:find("^reqText") then
+                        dataLines[i] = "reqText: " .. (r2 == "" and "(still empty)" or r2)
+                    elseif l:sub(1, 2) == "co" and l:find("^count") then
+                        dataLines[i] = "count: " .. c2
                     end
                 end
-            end
-            table.insert(dataLines, "== Rebirth window ==")
-            table.insert(dataLines, "reqText: " .. text)
-            dataLbl.Text = table.concat(dataLines, "\n")
+                dataLbl.Text = table.concat(dataLines, "\n")
+                local n = tonumber(string.match(r2 or "", "(%d+)"))
+                if n and n > 0 then
+                    Flags.TargetFloor = n
+                    Notify("Target floor auto-set to " .. tostring(n))
+                end
+            end)
         end
-    end)
+    else
+        local n = tonumber(string.match(req, "(%d+)"))
+        if n and n > 0 then
+            Flags.TargetFloor = n
+            Notify("Target floor auto-set to " .. tostring(n))
+        end
+    end
 end
 Btn(debugTab, "Scan Player Data", ScanData)
 Btn(debugTab, "Copy Player Data", function()
